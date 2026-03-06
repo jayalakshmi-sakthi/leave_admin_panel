@@ -1,35 +1,50 @@
 {
-    "name": "leave_admin_panel",
-    "short_name": "leave_admin_panel",
-    "start_url": ".",
+    "name": "LeaveX Admin",
+    "short_name": "LeaveX",
+    "id": "/",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#f8fafc",
+    "theme_color": "#7C3AED",
+    "description": "Leave Management System – Admin Panel",
+    "orientation": "any",
     "prefer_related_applications": false,
+    "categories": [
+        "productivity",
+        "business"
+    ],
     "icons": [
         {
-            "src": "icons/Icon-192.png",
+            "src": "icons/icon-192.png",
             "sizes": "192x192",
             "type": "image/png"
         },
         {
-            "src": "icons/Icon-512.png",
+            "src": "icons/icon-512.png",
             "sizes": "512x512",
             "type": "image/png"
         },
         {
-            "src": "icons/Icon-maskable-192.png",
+            "src": "icons/icon-maskable-192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "icons/Icon-maskable-512.png",
+            "src": "icons/icon-maskable-512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "form_factor": "wide",
+            "label": "LeaveX Admin Dashboard"
         }
     ]
 }

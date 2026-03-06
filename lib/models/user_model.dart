@@ -11,6 +11,10 @@ class UserModel {
   final bool approved; // New: User approval status
   final String? approvedBy; // New: Admin who approved
   final DateTime? approvedAt; // New: Approval timestamp
+  final Map<String, double>? leaveOverrides; // New: Personalized leave counts
+  final String? manualEmployeeId; // NEW
+  final String? designation; // NEW
+  final String? profilePicUrl; // ✅ NEW: Profile Picture
 
   UserModel({
     required this.uid,
@@ -23,6 +27,10 @@ class UserModel {
     this.approved = false,
     this.approvedBy,
     this.approvedAt,
+    this.leaveOverrides,
+    this.manualEmployeeId,
+    this.designation,
+    this.profilePicUrl, 
   });
 
   factory UserModel.fromMap(Map<String, dynamic> data, String uid) {
@@ -30,17 +38,23 @@ class UserModel {
       uid: uid,
       name: data['name'] ?? '',
       email: data['email'] ?? '',
-      employeeId: data['employeeId'] ?? uid.substring(0, 6),
+      employeeId: data['employeeId'] ?? "EMP-TEMP",
       role: data['role'] ?? 'staff',
       department: data['department'] ?? 'General',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
-      approved: data['approved'] ?? false,
+      approved: data['approved'] ?? true,
       approvedBy: data['approvedBy'],
       approvedAt: data['approvedAt'] is Timestamp
           ? (data['approvedAt'] as Timestamp).toDate()
           : null,
+      leaveOverrides: data['leaveOverrides'] != null 
+          ? (data['leaveOverrides'] as Map<String, dynamic>).map((k, v) => MapEntry(k, (v as num).toDouble()))
+          : null,
+      manualEmployeeId: data['manualEmployeeId'],
+      designation: data['designation'],
+      profilePicUrl: data['profilePicUrl'],
     );
   }
 
@@ -55,6 +69,10 @@ class UserModel {
       'approved': approved,
       'approvedBy': approvedBy,
       'approvedAt': approvedAt,
+      'leaveOverrides': leaveOverrides,
+      'manualEmployeeId': manualEmployeeId,
+      'designation': designation,
+      'profilePicUrl': profilePicUrl,
     };
   }
 }

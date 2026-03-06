@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart'; // ✅ Added
+import 'package:url_launcher/url_launcher.dart'; 
+import 'package:shimmer/shimmer.dart'; 
 import '../../models/leave_request_model.dart';
+import '../../models/user_model.dart'; // ✅ Added
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
 import 'admin_leave_detail_screen.dart';
 import '../../utils/admin_helpers.dart';
+import '../../widgets/responsive_container.dart';
 
 /// ==================================================
 /// 🎨 GLOBAL THEME CONSTANTS
@@ -20,7 +23,8 @@ const Color kTextMuted = Color(0xFF64748B);
 /// 📄 LEAVE REQUESTS SCREEN (ADMIN)
 /// ==================================================
 class LeaveRequestsScreen extends StatefulWidget {
-  const LeaveRequestsScreen({super.key});
+  final String? adminDepartment; // ✅ Added
+  const LeaveRequestsScreen({super.key, this.adminDepartment});
 
   @override
   State<LeaveRequestsScreen> createState() => _LeaveRequestsScreenState();
@@ -47,17 +51,31 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen>
   // --------------------------------------------------
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    // Resolve Department (Constructor > Route Args > Null)
+    String? effectiveDepartment = widget.adminDepartment;
+    if (effectiveDepartment == null) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is String) {
+        effectiveDepartment = args;
+      } else if (args is Map<String, dynamic>) {
+        effectiveDepartment = args['department'] as String?;
+      }
+    }
+
     return Scaffold(
-      backgroundColor: kScaffoldBg,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: kPrimaryBlue,
-        title: const Text(
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        iconTheme: theme.appBarTheme.iconTheme,
+        title: Text(
           "Leave Requests",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: theme.appBarTheme.foregroundColor, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            icon: Icon(Icons.refresh_rounded, color: theme.appBarTheme.foregroundColor),
             onPressed: () {
               setState(() {}); // Rebuilds the stream
             },
@@ -67,7 +85,9 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
+          indicatorColor: theme.colorScheme.primary,
+          labelColor: theme.colorScheme.primary,
+          unselectedLabelColor: theme.disabledColor,
           tabs: const [
             Tab(text: "ALL"),
             Tab(text: "PENDING"),
@@ -76,14 +96,16 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          _RequestsTab(),
-          _RequestsTab(filter: 'Pending'),
-          _RequestsTab(filter: 'Approved'),
-          _RequestsTab(filter: 'Rejected'),
-        ],
+      body: ResponsiveContainer(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _RequestsTab(adminDepartment: effectiveDepartment),
+            _RequestsTab(filter: 'Pending', adminDepartment: effectiveDepartment),
+            _RequestsTab(filter: 'Approved', adminDepartment: effectiveDepartment),
+            _RequestsTab(filter: 'Rejected', adminDepartment: effectiveDepartment),
+          ],
+        ),
       ),
     );
   }
@@ -94,29 +116,49 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen>
 /// ==================================================
 class _RequestsTab extends StatelessWidget {
   final String? filter;
-  const _RequestsTab({this.filter});
+  final String? adminDepartment; // ✅ Added
+
+  const _RequestsTab({this.filter, this.adminDepartment});
 
   @override
   Widget build(BuildContext context) {
     final FirestoreService firestoreService = FirestoreService();
     final auth = FirebaseAuth.instance;
+    final theme = Theme.of(context);
 
+    // Filter Logic:
+    // If adminDepartment == 'All' or null -> Show All (Super Admin behavior)
+    // If adminDepartment == 'CSE' -> Show Only CSE
+    
     return StreamBuilder<List<LeaveRequestModel>>(
-      stream: firestoreService.getLeaveRequestsStream(statusFilter: filter),
+      stream: firestoreService.getLeaveRequestsStream(
+        statusFilter: filter, 
+        department: adminDepartment ?? 'CSE',
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return _buildSkeletonList(context);
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text("Error: ${snapshot.error}"));
+          return Center(child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red)),
+          ));
         }
 
         final requests = snapshot.data ?? [];
 
         if (requests.isEmpty) {
-          return const Center(
-            child: Text("No leave requests found"),
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inbox_rounded, size: 64, color: theme.disabledColor),
+                const SizedBox(height: 16),
+                Text("No $filter requests found", style: TextStyle(color: theme.disabledColor, fontWeight: FontWeight.bold)),
+              ],
+            ),
           );
         }
 
@@ -132,6 +174,7 @@ class _RequestsTab extends StatelessWidget {
                   requests[index].id,
                   status,
                   auth.currentUser?.uid ?? 'admin',
+                  department: requests[index].department ?? 'CSE',
                 );
 
                 // ✅ Send Notification to User
@@ -139,9 +182,11 @@ class _RequestsTab extends StatelessWidget {
                   await NotificationService().sendNotification(
                     toUserId: requests[index].userId,
                     title: 'Leave Request $status',
-                    body: 'Your leave request for ${AdminHelpers.formatDate(requests[index].fromDate)} has been $status.',
+                    body: 'Your ${requests[index].leaveType} request for ${AdminHelpers.formatDate(requests[index].fromDate)} has been $status.',
                     type: 'status_change',
                     relatedId: requests[index].id,
+                    leaveType: requests[index].leaveType,
+                    academicYearId: requests[index].academicYearId,
                   );
                 } catch (e) {
                   debugPrint("Notification Error: $e");
@@ -163,6 +208,28 @@ class _RequestsTab extends StatelessWidget {
       },
     );
   }
+
+  Widget _buildSkeletonList(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (context, index) => Shimmer.fromColors(
+        baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+        highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          height: 200,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// ==================================================
@@ -173,9 +240,6 @@ class _LeaveRequestCard extends StatelessWidget {
   final String adminId;
   final Function(String) onUpdateStatus;
 
-  // Constructor - intentionally removed 'const' to avoid any inferred const issues 
-  // with children, although with proper params it technically could be. 
-  // Safety first!
   const _LeaveRequestCard({
     required this.request,
     required this.adminId,
@@ -184,216 +248,316 @@ class _LeaveRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final Color statusColor = AdminHelpers.getStatusColor(request.status);
     final String leaveType = request.leaveType.toString();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-       // Removed const from here to be safe, though not strictly wrong if params are const
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 👤 User Name
-                  Text(
-                    request.userName.toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: kTextDark,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  // 🆔 Employee ID
-                  Text(
-                    "ID: ${request.employeeId ?? 'N/A'}",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: kTextMuted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+    // 🌟 Directional Logic
+    final bool isApproved = request.status == 'Approved';
+    final MainAxisAlignment alignment = isApproved ? MainAxisAlignment.end : MainAxisAlignment.start;
+
+    return Row(
+      mainAxisAlignment: alignment,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800), // Prevent full-width stretch
+          child: Container(
+            width: MediaQuery.of(context).size.width > 900 ? 500 : MediaQuery.of(context).size.width * 0.85,
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isApproved ? Colors.green.withOpacity(0.3) : theme.dividerColor.withOpacity(0.6), 
+                width: 1 // Keep it subtle
               ),
-              // 🏷 Status badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  request.status.toUpperCase(),
-                  style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const Divider(height: 24, thickness: 1, color: Color(0xFFE2E8F0)),
-
-          // 🔖 Leave Type (Neutral)
-          Text(
-            AdminHelpers.getLeaveName(leaveType),
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
-          ),
-
-          const SizedBox(height: 6),
-
-          // 📅 Dates
-          Row(
-            children: [
-              const Icon(Icons.calendar_today_rounded, size: 14, color: kTextMuted),
-              const SizedBox(width: 6),
-              Text(
-                "${AdminHelpers.formatDate(request.fromDate)} → ${AdminHelpers.formatDate(request.toDate)}",
-                style: const TextStyle(color: kTextMuted, fontSize: 13),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 6),
-
-          // 📊 Days
-          Row(
-            children: [
-              const Icon(Icons.access_time_rounded, size: 14, color: kTextMuted),
-              const SizedBox(width: 6),
-              Text(
-                request.isHalfDay
-                    ? "${request.numberOfDays} Days (${request.halfDaySession == 'FN' ? 'Forenoon' : 'Afternoon'})"
-                    : "${request.numberOfDays} Days",
-                style: const TextStyle(color: kTextMuted, fontSize: 13),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // 📎 Attachment & Details
-          Row(
-            children: [
-              // Initial Attachment (e.g. Med Cert)
-              if (request.signedFormUrl != null && request.signedFormUrl!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final uri = Uri.parse(request.signedFormUrl!);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri);
-                      }
-                    },
-                    icon: const Icon(Icons.attachment_rounded, size: 18),
-                    label: const Text("View Attachment"),
-                    style: TextButton.styleFrom(foregroundColor: kPrimaryBlue),
-                  ),
-                ),
-
-              // Signed Copy (Post-Approval)
-              if (request.finalSignedFormUrl != null && request.finalSignedFormUrl!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final uri = Uri.parse(request.finalSignedFormUrl!);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri);
-                      }
-                    },
-                    icon: const Icon(Icons.verified_user_rounded, size: 18),
-                    label: const Text("View Signed Copy"),
-                    style: TextButton.styleFrom(
-                        foregroundColor: Colors.green, // Distinct color
-                        backgroundColor: Colors.green.withOpacity(0.05)),
-                  ),
-                ),
-              
-              TextButton.icon(
-                onPressed: () {
-                  _showRequestDetails(context, request);
-                },
-                icon: const Icon(Icons.visibility_rounded, size: 18),
-                label: const Text("Details"),
-                style: TextButton.styleFrom(foregroundColor: kTextDark),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // ✅ Actions (Approve/Reject)
-          if (request.status == 'Pending') ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => onUpdateStatus('Rejected'),
-                  child: const Text("Reject", style: TextStyle(color: Colors.red)),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: () => onUpdateStatus('Approved'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text("Approve", style: TextStyle(color: Colors.white)),
-                ),
+              boxShadow: [
+                 if (!isDark)
+                  BoxShadow(
+                    color: const Color(0xFF64748B).withOpacity(0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  )
               ],
             ),
-          ],
-        ],
-      ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // 🌟 LIVE USER DATA FETCH
+                    StreamBuilder<UserModel>(
+                      stream: FirestoreService().getUserStream(request.userId),
+                      builder: (context, userSnap) {
+                        final user = userSnap.data;
+                        final String displayName = user?.name ?? request.userName;
+                        final String displayId = user?.manualEmployeeId ?? user?.employeeId ?? request.employeeId ?? 'N/A';
+                        final String? profilePic = user?.profilePicUrl;
+
+                        return Row(
+                          children: [
+                            // 🖼️ AVATAR
+                            Container(
+                                margin: const EdgeInsets.only(right: 12.0),
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: theme.dividerColor),
+                                ),
+                                child: CircleAvatar(
+                                radius: 22,
+                                backgroundColor: AdminHelpers.primaryColor.withOpacity(0.1),
+                                backgroundImage: profilePic != null && profilePic.isNotEmpty
+                                    ? NetworkImage(profilePic)
+                                    : null,
+                                child: profilePic == null 
+                                    ? Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.primaryColor))
+                                    : null,
+                              ),
+                            ),
+                            
+                            // 📄 TEXT INFO
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayName,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.textTheme.titleLarge?.color,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: theme.dividerColor.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    displayId,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: theme.textTheme.bodyMedium?.color,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+                    ),
+                    // 🏷 Status badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: statusColor.withOpacity(0.2)),
+                      ),
+                      child: Text(
+                        request.status.toUpperCase(),
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // 🔖 Leave Type (Neutral)
+                Row(
+                  children: [
+                    Text(
+                      AdminHelpers.getLeaveName(leaveType),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.titleMedium?.color,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if(request.isHalfDay)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text("HALF DAY", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // 📅 Dates
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.calendar_today_rounded, size: 16, color: theme.primaryColor),
+                      const SizedBox(width: 10),
+                      Text(
+                        "${AdminHelpers.formatDate(request.fromDate)}  ➔  ${AdminHelpers.formatDate(request.toDate)}",
+                        style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(width: 1, height: 16, color: theme.dividerColor),
+                      const SizedBox(width: 16),
+                      Icon(Icons.access_time_rounded, size: 16, color: theme.primaryColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        "${request.numberOfDays} Days",
+                        style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 📎 Attachment & Details
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    // Initial Attachment (e.g. Med Cert)
+                    if (request.signedFormUrl != null && request.signedFormUrl!.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                            final uri = Uri.parse(request.signedFormUrl!);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri);
+                            }
+                        },
+                        icon: const Icon(Icons.description_outlined, size: 18),
+                        label: const Text("Proof"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminHelpers.primaryColor,
+                          side: BorderSide(color: AdminHelpers.primaryColor.withOpacity(0.3)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+
+                    // Signed Copy (Post-Approval)
+                    if (request.finalSignedFormUrl != null && request.finalSignedFormUrl!.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                            final uri = Uri.parse(request.finalSignedFormUrl!);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri);
+                            }
+                        },
+                        icon: const Icon(Icons.verified_rounded, size: 18),
+                        label: const Text("Signed Copy"),
+                         style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.teal,
+                          side: BorderSide(color: Colors.teal.withOpacity(0.3)),
+                          backgroundColor: Colors.teal.withOpacity(0.05),
+                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        _showRequestDetails(context, request);
+                      },
+                      icon: Icon(Icons.visibility_rounded, size: 18, color: theme.textTheme.bodyLarge?.color),
+                      label: Text("View Details", style: TextStyle(color: theme.textTheme.bodyLarge?.color)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: theme.dividerColor),
+                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ✅ Actions (Approve/Reject)
+                if (request.status == 'Pending') ...[
+                  const SizedBox(height: 20),
+                  Divider(height: 1, color: theme.dividerColor.withOpacity(0.5)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                       Expanded(
+                         child: OutlinedButton(
+                          onPressed: () => onUpdateStatus('Rejected'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: BorderSide(color: Colors.red.withOpacity(0.2)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text("Reject", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => onUpdateStatus('Approved'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AdminHelpers.primaryColor,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text("Approve", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   void _showRequestDetails(BuildContext context, LeaveRequestModel request) {
+    final theme = Theme.of(context);
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Application Form Details"),
+        backgroundColor: theme.cardColor,
+        title: Text("Application Form Details", style: TextStyle(color: theme.textTheme.titleLarge?.color)),
         content: SizedBox(
           width: 500,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _detailRow("Applicant Name", request.userName),
-              _detailRow("Employee ID", request.employeeId ?? "N/A"),
-              _detailRow("Leave Type", AdminHelpers.getLeaveName(request.leaveType)),
-              _detailRow("From Date", AdminHelpers.formatDate(request.fromDate)),
-              _detailRow("To Date", AdminHelpers.formatDate(request.toDate)),
-              _detailRow("No. of Days", request.numberOfDays.toString()),
-              if(request.isHalfDay) _detailRow("Session", request.halfDaySession ?? "-"),
+              _detailRow(context, "Applicant Name", request.userName),
+              _detailRow(context, "Employee ID", request.employeeId ?? "N/A"),
+              _detailRow(context, "Leave Type", AdminHelpers.getLeaveName(request.leaveType)),
+              _detailRow(context, "From Date", AdminHelpers.formatDate(request.fromDate)),
+              _detailRow(context, "To Date", AdminHelpers.formatDate(request.toDate)),
+              _detailRow(context, "No. of Days", request.numberOfDays.toString()),
+              if(request.isHalfDay) _detailRow(context, "Session", request.halfDaySession ?? "-"),
               const SizedBox(height: 12),
-              const Text("Reason:", style: TextStyle(fontWeight: FontWeight.bold)),
-              Text(request.reason, style: const TextStyle(fontSize: 14)),
+              Text("Reason:", style: TextStyle(fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)),
+              Text(request.reason, style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color)),
             ],
           ),
         ),
@@ -407,7 +571,8 @@ class _LeaveRequestCard extends StatelessWidget {
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  Widget _detailRow(BuildContext context, String label, String value) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -417,13 +582,13 @@ class _LeaveRequestCard extends StatelessWidget {
             width: 140,
             child: Text(
               "$label:",
-              style: const TextStyle(fontWeight: FontWeight.bold, color: kTextMuted),
+              style: TextStyle(fontWeight: FontWeight.bold, color: theme.textTheme.bodySmall?.color),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.bold, color: kTextDark),
+              style: TextStyle(fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color),
             ),
           ),
         ],

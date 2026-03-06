@@ -10,34 +10,37 @@ class AdminLoginScreen extends StatefulWidget {
 }
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
-  final _email = TextEditingController();
-  final _password = TextEditingController();
+  final _usernameController = TextEditingController(); // 🔄 Changed from _email
+  final _passwordController = TextEditingController();
 
   bool _loading = false;
   bool _showPassword = false;
 
-  // 🎨 Theme Colors
-  static const Color primaryBlue = Color(0xFF2563EB);
-  static const Color darkSlate = Color(0xFF0F172A);
-  static const Color softText = Color(0xFF64748B);
+  // 🎨 Theme Colors (Soulful Palette - Matched with User App)
+  static const Color primaryBlue = Color(0xFF7C3AED); // Violet 600
+  static const Color darkSlate = Color(0xFF1E293B);   // Slate 800 (Softer)
+  static const Color softText = Color(0xFF64748B);    // Slate 500
   static const Color cardBg = Colors.white;
-  static const Color scaffoldBg = Color(0xFFF1F5F9);
+  static const Color scaffoldBg = Color(0xFFF8FAFC);  // Slate 50
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _fire = FirebaseFirestore.instance;
 
   @override
   void dispose() {
-    _email.dispose();
-    _password.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   // --------------------------------------------------
-  // 🔐 ADMIN LOGIN
+  // 🔐 ADMIN LOGIN (USERNAME -> EMAIL LOOKUP)
   // --------------------------------------------------
   Future<void> _login() async {
-    if (_email.text.trim().isEmpty || _password.text.trim().isEmpty) {
+    final input = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (input.isEmpty || password.isEmpty) {
       _showError("Please enter your admin credentials");
       return;
     }
@@ -45,24 +48,83 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     setState(() => _loading = true);
 
     try {
-      final cred = await _auth.signInWithEmailAndPassword(
-        email: _email.text.trim(),
-        password: _password.text.trim(),
-      );
+      UserCredential? cred;
+      FirebaseAuthException? shadowAuthError;
+      
+      // 🔄 STRATEGY 1: Try as 'Shadow Admin' (username@leavex.admin)
+      if (!input.contains('@')) {
+        try {
+          cred = await _auth.signInWithEmailAndPassword(
+            email: "$input@leavex.admin", 
+            password: password,
+          );
+          
+          // 🛑 ZOMBIE CHECK: Does this Shadow Admin actually exist in DB?
+          final zombieCheck = await _fire.collection('users').doc(cred.user!.uid).get();
+          if (!zombieCheck.exists) {
+            debugPrint("👻 Zombie Account Detected (Auth exists, DB missing). Ignoring.");
+            await _auth.signOut();
+            cred = null; // Discard credential, try other strategies
+          } else {
+            debugPrint("✅ Logged in as Shadow Admin: $input");
+          }
+        } on FirebaseAuthException catch (e) {
+           shadowAuthError = e; // Save error for later
+        }
+      }
+
+      // 🔄 STRATEGY 2: Try as Direct Email (Legacy/Super Admin)
+      if (cred == null && input.contains('@')) {
+        try {
+          cred = await _auth.signInWithEmailAndPassword(
+            email: input,
+            password: password,
+          );
+        } catch (e) {
+             // Fallthrough
+        }
+      }
+      
+      // 🔄 STRATEGY 3: Firestore Lookup (For Super Admin/Legacy who use Username -> Real Email)
+      if (cred == null && !input.contains('@')) {
+        try {
+          final snap = await _fire.collection('users').where('username', isEqualTo: input).limit(1).get();
+          if (snap.docs.isNotEmpty) {
+             final realEmail = snap.docs.first.data()['email'];
+             debugPrint("🔍 Found Real Email for '$input': $realEmail");
+             cred = await _auth.signInWithEmailAndPassword(
+                email: realEmail, 
+                password: password
+             );
+          }
+        } catch (e) {
+           // Fallthrough
+        }
+      }
+
+      // ❌ FINAL CHECK
+      if (cred == null) {
+          if (shadowAuthError != null) throw shadowAuthError; // Throw the password error if we found a shadow account
+          throw FirebaseAuthException(code: 'invalid-credential', message: "Login failed.");
+      }
 
       final uid = cred.user!.uid;
 
-      // 🔍 Check user role from Firestore
+      debugPrint("✅ Auth Success. UID: $uid");
+
+      // 🔍 STEP 3: Verify Role
       final userDoc = await _fire.collection('users').doc(uid).get();
+      debugPrint("📄 User Doc Exists: ${userDoc.exists}");
 
       if (!userDoc.exists) {
         await _auth.signOut();
-        throw "User record not found";
+        throw "User record not found in database";
       }
 
       final role = userDoc.data()?['role'];
-
-      if (role != 'admin') {
+      debugPrint("👮 User Role: $role");
+      
+      if (role != 'admin' && role != 'super_admin') {
         await _auth.signOut();
         throw "Access denied. Admins only.";
       }
@@ -70,10 +132,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       if (!mounted) return;
 
       // ✅ SUCCESS → DASHBOARD
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Login Successful! Redirecting..."), backgroundColor: Colors.green),
+      );
+      
+      // Delay slightly to show success message
+      await Future.delayed(const Duration(milliseconds: 500));
       Navigator.pushReplacementNamed(context, '/dashboard');
     } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? "Login failed");
+      debugPrint("❌ Auth Error: ${e.code} - ${e.message}");
+      String msg = e.message ?? "Auth Error";
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        msg = "Invalid username or password.";
+      }
+      _showError("Login failed: $msg");
     } catch (e) {
+      debugPrint("❌ General Error: $e");
       _showError(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -84,6 +158,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   // ❌ ERROR SNACKBAR
   // --------------------------------------------------
   void _showError(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
@@ -92,6 +167,149 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         margin: const EdgeInsets.all(20),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  // --------------------------------------------------
+  // 🔐 FORGOT PASSWORD (USERNAME SUPPORT)
+  // --------------------------------------------------
+  void _showForgotPasswordDialog() {
+    final resetInputController = TextEditingController();
+    bool loading = false;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            "Reset Password",
+            style: TextStyle(fontWeight: FontWeight.bold, color: darkSlate),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Enter your Username OR Registered Email. We'll find your account and send a reset link.",
+                style: TextStyle(color: softText, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: resetInputController,
+                decoration: InputDecoration(
+                  labelText: "Username or Email",
+                  hintText: "e.g. placement_cell",
+                  prefixIcon: const Icon(Icons.search, color: primaryBlue),
+                  filled: true,
+                  fillColor: scaffoldBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: loading ? null : () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: softText)),
+            ),
+            ElevatedButton(
+              onPressed: loading ? null : () async {
+                final input = resetInputController.text.trim();
+                if (input.isEmpty) {
+                  _showError("Please enter username or email");
+                  return;
+                }
+
+                setDialogState(() => loading = true);
+
+                try {
+                  String? emailToSend;
+
+                  // 🔍 STEP 1: Smart Lookup
+                  QuerySnapshot? snap;
+                  
+                  if (input.contains('@')) {
+                    // Try finding by Recovery Email OR Auth Email
+                    snap = await _fire.collection('users')
+                        .where('recoveryEmail', isEqualTo: input)
+                        .limit(1)
+                        .get();
+                    
+                    if (snap.docs.isEmpty) {
+                       snap = await _fire.collection('users')
+                         .where('email', isEqualTo: input)
+                         .limit(1)
+                         .get();
+                    }
+                  } else {
+                    // Try finding by Username
+                    snap = await _fire.collection('users')
+                        .where('username', isEqualTo: input)
+                        .limit(1)
+                        .get();
+                  }
+
+                  // 🎯 STEP 2: Resolve Email
+                  if (snap != null && snap.docs.isNotEmpty) {
+                    final data = snap.docs.first.data() as Map<String, dynamic>;
+                    // Prefer the Auth Email for reset (Firebase requirement), 
+                    // but the ink will arrive at the real inbox due to aliasing/plus-addressing.
+                    emailToSend = data['email']; 
+                  } else {
+                    // If not found in DB but looks like email, try sending directly (legacy/superadmin)
+                    if (input.contains('@')) emailToSend = input;
+                  }
+
+                  // 📧 STEP 3: Send Reset
+                  if (emailToSend != null) {
+                    await _auth.sendPasswordResetEmail(email: emailToSend);
+                    debugPrint("📧 Reset link sent to: $emailToSend");
+                    
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("✅ Reset link sent to: $emailToSend\n(Check Spam folder too!)"),
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 8),
+                          margin: const EdgeInsets.all(20),
+                        ),
+                      );
+                    }
+                  } else {
+                     debugPrint("❌ User not found for reset: $input");
+                     if (mounted) {
+                        // For this internal app, let's be specific
+                        _showError("Username '$input' not found within users collection.");
+                        setDialogState(() => loading = false); // Stop loading manually since we didn't pop
+                     }
+                  }
+                } catch (e) {
+                  debugPrint("❌ Reset Error: $e");
+                  _showError("Error: ${e.toString()}");
+                } finally {
+                  if (mounted) setDialogState(() => loading = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: loading 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text("Send Reset Link", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
       ),
     );
@@ -127,7 +345,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 _buildIconHeader(),
                 const SizedBox(height: 24),
                 const Text(
-                  "Admin Portal",
+                  "Admin_LeaveX",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
@@ -141,12 +359,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 ),
                 const SizedBox(height: 40),
 
-                // 📧 Email
+                // 👤 Admin ID Input
                 _buildInputField(
-                  controller: _email,
-                  label: "Admin Email",
-                  hint: "leavex@gmail.com",
-                  icon: Icons.email_outlined,
+                  controller: _usernameController,
+                  label: "Username or Email",
+                  hint: "Username",
+                  icon: Icons.admin_panel_settings_outlined,
                   obscureText: false,
                 ),
 
@@ -154,7 +372,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
                 // 🔑 Password
                 _buildInputField(
-                  controller: _password,
+                  controller: _passwordController,
                   label: "Password",
                   hint: "••••••••",
                   icon: Icons.lock_outline,
@@ -169,7 +387,25 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 12),
+                
+                // 🔗 Forgot Password Link
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    child: const Text(
+                      "Forgot Password?",
+                      style: TextStyle(
+                        color: primaryBlue,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
                 _buildLoginButton(),
               ],
             ),
@@ -182,17 +418,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   // --------------------------------------------------
   // 🧩 UI HELPERS
   // --------------------------------------------------
-  Widget _buildIconHeader() => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: primaryBlue.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.admin_panel_settings,
-          color: primaryBlue,
-          size: 40,
-        ),
+  Widget _buildIconHeader() => Image.asset(
+        'assets/logo.png',
+        width: 120, // ✅ Slightly smaller for better proportion
+        height: 120,
+        fit: BoxFit.contain,
       );
 
   Widget _buildInputField({
@@ -218,11 +448,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         TextField(
           controller: controller,
           obscureText: obscureText,
-          keyboardType: obscureText
-              ? TextInputType.visiblePassword
-              : TextInputType.emailAddress,
+          // Removed explicit keyboardType for flexibility with usernames
           decoration: InputDecoration(
             hintText: hint,
+            hintStyle: TextStyle(color: softText.withOpacity(0.5)),
             prefixIcon: Icon(icon, color: primaryBlue),
             suffixIcon: suffix,
             filled: true,

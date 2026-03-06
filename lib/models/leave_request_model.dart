@@ -16,8 +16,11 @@ class LeaveRequestModel {
   final bool isHalfDay;
   final String? halfDaySession; // 'FN' or 'AN'
   final String? signedFormUrl;
-  final String? finalSignedFormUrl; // ✅ Added
+  final String? finalSignedFormUrl;
   final String? employeeId;
+  final String? academicYearId;
+  final String? department; 
+  final String? applicationId; // ✅ Added
 
   LeaveRequestModel({
     required this.id,
@@ -35,8 +38,11 @@ class LeaveRequestModel {
     this.isHalfDay = false,
     this.halfDaySession,
     this.signedFormUrl,
-    this.finalSignedFormUrl, // ✅ Added
+    this.finalSignedFormUrl,
     this.employeeId,
+    this.academicYearId,
+    this.department, 
+    this.applicationId, // ✅ ADDED
   });
 
   factory LeaveRequestModel.fromMap(Map<String, dynamic> data, String id) {
@@ -44,7 +50,7 @@ class LeaveRequestModel {
       id: id,
       userId: data['userId'] ?? '',
       userName: data['userName'] ?? 'Unknown',
-      employeeId: data['employeeId'], // ✅ Added
+      employeeId: data['employeeId'],
       leaveType: data['leaveType'] ?? 'Leave',
       fromDate: (data['fromDate'] as Timestamp).toDate(),
       toDate: (data['toDate'] as Timestamp).toDate(),
@@ -59,7 +65,10 @@ class LeaveRequestModel {
       isHalfDay: data['isHalfDay'] ?? false,
       halfDaySession: data['halfDaySession'],
       signedFormUrl: data['signedFormUrl'],
-      finalSignedFormUrl: data['finalSignedFormUrl'], // ✅ Added
+      finalSignedFormUrl: data['finalSignedFormUrl'],
+      academicYearId: data['academicYearId'],
+      department: data['department'], 
+      applicationId: data['applicationId'], // ✅ Added
     );
   }
 
@@ -68,6 +77,7 @@ class LeaveRequestModel {
       'userId': userId,
       'userName': userName,
       'employeeId': employeeId,
+      'department': department, // ✅ Added
       'leaveType': leaveType,
       'fromDate': fromDate,
       'toDate': toDate,
@@ -80,7 +90,9 @@ class LeaveRequestModel {
       'isHalfDay': isHalfDay,
       'halfDaySession': halfDaySession,
       'signedFormUrl': signedFormUrl,
-      'finalSignedFormUrl': finalSignedFormUrl, // ✅ Added
+      'finalSignedFormUrl': finalSignedFormUrl,
+      'academicYearId': academicYearId,
+      'applicationId': applicationId, // ✅ Added
     };
   }
 }

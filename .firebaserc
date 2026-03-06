@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "leave-management-app-f07b8"
+  },
+  "targets": {
+    "leave-management-app-f07b8": {
+      "hosting": {
+        "admin-app": [
+          "admin-leavex"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

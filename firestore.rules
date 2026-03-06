@@ -1,0 +1,199 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────
+    // 🛠 HELPER FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    /// Admin = role is 'admin' or 'super_admin'
+    function isAdmin() {
+      return isAuthenticated() && hasUserDoc() &&
+             myUserDoc().role in ['admin', 'super_admin'];
+    }
+
+    /// Super Admin only
+    function isSuperAdmin() {
+      return isAuthenticated() && hasUserDoc() &&
+             myUserDoc().role == 'super_admin';
+    }
+
+    /// Admin can only access their own department
+    function isAdminOfDept(dept) {
+      return isAuthenticated() && hasUserDoc() &&
+             myUserDoc().role in ['admin', 'super_admin'] &&
+             (myUserDoc().department == dept || myUserDoc().role == 'super_admin');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 👤 USERS COLLECTION
+    // Each admin can read users from their own department only.
+    // Staff can read/write their own document.
+    // ─────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Staff: own document
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+
+      // Admin: can read/write users in their own department
+      allow read: if isAdmin() &&
+                     (request.auth.uid == userId ||
+                      (hasUserDoc() && resource.data.department == myUserDoc().department) ||
+                      isSuperAdmin());
+
+      allow update: if isAdmin() &&
+                       (resource.data.department == myUserDoc().department || isSuperAdmin());
+
+      // Comp-Off Grants (old path kept for migration compatibility)
+      match /compOffGrants/{grantId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAdmin();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 📝 LEAVE REQUESTS — Department-isolated
+    // Path: leaveRequests/{dept}/records/{id}
+    // ─────────────────────────────────────────────────────────────
+    match /leaveRequests/{dept}/records/{requestId} {
+      // Staff can CREATE in their own department
+      allow create: if isAuthenticated() &&
+                       hasUserDoc() &&
+                       myUserDoc().department == dept;
+
+      // Read: own request OR admin of this dept
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      isAdminOfDept(dept));
+
+      // Update/Delete: own request (for edit before approval) OR admin of this dept
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        isAdminOfDept(dept));
+
+      allow delete: if isAdminOfDept(dept);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🔀 COMP OFF REQUESTS — Department-isolated
+    // Path: compOffRequests/{dept}/records/{id}
+    // ─────────────────────────────────────────────────────────────
+    match /compOffRequests/{dept}/records/{requestId} {
+      allow create: if isAuthenticated() &&
+                       hasUserDoc() &&
+                       myUserDoc().department == dept;
+
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      isAdminOfDept(dept));
+
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        isAdminOfDept(dept));
+
+      allow delete: if isAdminOfDept(dept);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🏢 DEPARTMENTS — All dept-specific settings live here
+    // Path: departments/{dept}/...
+    // Only the admin of that dept can read/write.
+    // ─────────────────────────────────────────────────────────────
+    match /departments/{dept} {
+      allow read, write: if isAdminOfDept(dept);
+
+      // Academic Years scoped to dept
+      match /academicYears/{yearId} {
+        allow read: if isAdminOfDept(dept);
+        allow write: if isAdminOfDept(dept);
+      }
+
+      // Settings (leave_types, academic_year, etc.)
+      match /settings/{docId} {
+        allow read: if isAdminOfDept(dept);
+        allow write: if isAdminOfDept(dept);
+      }
+
+      // Comp Off Grants scoped to dept
+      match /compOffGrants/{grantId} {
+        allow read: if isAdminOfDept(dept) ||
+                       (isAuthenticated() && hasUserDoc() && resource.data.userId == request.auth.uid);
+        allow write: if isAdminOfDept(dept);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 📅 ACADEMIC YEARS (legacy global — kept for backward compat)
+    // New data should go to departments/{dept}/academicYears
+    // ─────────────────────────────────────────────────────────────
+    match /academicYears/{yearId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+
+      match /deptCounters/{dept} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ⚙️ SETTINGS (legacy global — read-only for backward compat)
+    // ─────────────────────────────────────────────────────────────
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin(); // Only super admin can change global settings
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🔔 NOTIFICATIONS — per-user (already isolated by toUserId)
+    // ─────────────────────────────────────────────────────────────
+    match /notifications/{notifId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() &&
+                     (resource.data.toUserId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() &&
+                       (resource.data.toUserId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() &&
+                       (resource.data.toUserId == request.auth.uid || isAdmin());
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🔢 COUNTERS (for ID generation)
+    // ─────────────────────────────────────────────────────────────
+    match /counters/{counterId} {
+      allow read, update, create: if isAuthenticated();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 📤 FCM QUEUE (Cloud Functions only)
+    // ─────────────────────────────────────────────────────────────
+    match /fcm_queue/{docId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🌐 COLLECTION GROUP: records (read own requests across depts)
+    // Used by staff mobile app to see their own requests
+    // ─────────────────────────────────────────────────────────────
+    match /{path=**}/records/{requestId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      (hasUserDoc() && resource.data.department == myUserDoc().department));
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        (hasUserDoc() && resource.data.department == myUserDoc().department &&
+                         myUserDoc().role in ['admin', 'super_admin']));
+    }
+  }
+}

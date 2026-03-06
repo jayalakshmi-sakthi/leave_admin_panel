@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import '../../utils/admin_helpers.dart';
 import '../../models/user_model.dart';
 import '../../services/firestore_service.dart';
 import '../../routes/app_routes.dart';
+import '../../widgets/responsive_container.dart';
+import 'package:shimmer/shimmer.dart';
 
 class EmployeesScreen extends StatefulWidget {
-  const EmployeesScreen({super.key});
+  final String? adminDepartment;
+  const EmployeesScreen({super.key, this.adminDepartment});
 
   @override
   State<EmployeesScreen> createState() => _EmployeesScreenState();
@@ -15,26 +19,11 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   String _searchText = '';
-  String _selectedDepartment = 'All';
-
-  final List<String> _departments = [
-    'All',
-    'CSE',
-    'IT',
-    'ECE',
-    'EEE',
-    'Mechanical',
-    'Civil',
-    'MBA',
-    'Science & Humanities',
-    'Other'
-  ];
+  String _selectedStatus = 'All'; // New Filter
 
   // 🎨 Theme
-  static const Color primaryBlue = Color(0xFF3399CC);
-  static const Color scaffoldBg = Color(0xFFF8FAFC);
-  static const Color textDark = Color(0xFF0F172A);
-  static const Color textMuted = Color(0xFF64748B);
+  // Using AdminHelpers constants directly
+  static const Color primaryBlue = AdminHelpers.secondaryColor; // Mapped to secondary for actionable logic
 
   @override
   void dispose() {
@@ -47,23 +36,31 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   // --------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildSearchAndFilter(),
-        _buildEmployeeList(),
-      ],
+    return ResponsiveContainer(
+      child: Column(
+        children: [
+          _buildSearchAndFilter(),
+          _buildEmployeeList(),
+        ],
+      ),
     );
   }
 
   // --------------------------------------------------
   // 🔍 SEARCH & FILTER
   // --------------------------------------------------
+  // --------------------------------------------------
+  // 🔍 SEARCH & FILTER
+  // --------------------------------------------------
   Widget _buildSearchAndFilter() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1.5)),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        border: Border(bottom: BorderSide(color: theme.dividerColor, width: 1.5)),
       ),
       child: Row(
         children: [
@@ -75,58 +72,59 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
               onChanged: (value) {
                 setState(() => _searchText = value.toLowerCase());
               },
+              style: TextStyle(color: theme.textTheme.bodyMedium?.color),
               decoration: InputDecoration(
                 hintText: "Search name or email...",
-                hintStyle: const TextStyle(color: textMuted, fontSize: 13),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+                hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
+                prefixIcon: Icon(Icons.search_rounded, color: theme.iconTheme.color, size: 20),
                 filled: true,
-                fillColor: const Color(0xFFF8FAFC),
+                fillColor: theme.scaffoldBackgroundColor,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  borderSide: BorderSide(color: theme.dividerColor),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: primaryBlue, width: 1.5),
+                  borderSide: const BorderSide(color: AdminHelpers.secondaryColor, width: 1.5),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          // Filter Dropdown
+          // Status Dropdown
           Expanded(
             flex: 1,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: theme.scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedDepartment,
+                  value: _selectedStatus,
                   isExpanded: true,
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B), size: 18),
-                  items: _departments.map((dept) {
+                  dropdownColor: theme.cardColor,
+                  icon: Icon(Icons.filter_list_rounded, color: theme.iconTheme.color, size: 18),
+                  items: ['All', 'Pending', 'Approved'].map((s) {
                     return DropdownMenuItem(
-                      value: dept,
+                      value: s,
                       child: Text(
-                        dept,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                        s,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.textTheme.bodyMedium?.color),
                       ),
                     );
                   }).toList(),
                   onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _selectedDepartment = value);
-                    }
+                    if (value != null) setState(() => _selectedStatus = value);
                   },
                 ),
               ),
             ),
           ),
+          const SizedBox(width: 8),
         ],
       ),
     );
@@ -136,29 +134,34 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   // 👥 EMPLOYEE LIST (REAL-TIME)
   // --------------------------------------------------
   Widget _buildEmployeeList() {
+    final theme = Theme.of(context);
+    
     return Expanded(
       child: StreamBuilder<List<UserModel>>(
-        stream: _firestoreService.getEmployeesStream(
-          departmentFilter: _selectedDepartment,
-        ),
+        stream: _firestoreService.getEmployeesStream(department: widget.adminDepartment ?? 'CSE'),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return _buildSkeletonList();
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
+            return Center(child: Text("Error: ${snapshot.error}", style: TextStyle(color: theme.textTheme.bodyMedium?.color)));
           }
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return _emptyState();
           }
 
-          // Client-side search filtering
+          // Client-side search & status filtering
           final employees = snapshot.data!.where((user) {
             final name = user.name.toLowerCase();
             final email = user.email.toLowerCase();
-            return name.contains(_searchText) || email.contains(_searchText);
+            bool matchesSearch = name.contains(_searchText) || email.contains(_searchText);
+            bool matchesStatus = _selectedStatus == 'All' 
+                ? true 
+                : (_selectedStatus == 'Pending' ? !user.approved : user.approved);
+            
+            return matchesSearch && matchesStatus;
           }).toList();
 
           if (employees.isEmpty) {
@@ -174,10 +177,10 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                   children: [
                    Text(
                       "All Employees",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: textMuted,
+                        color: theme.textTheme.bodySmall?.color,
                       ),
                     ),
                     const Spacer(),
@@ -217,15 +220,16 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   }
 
   Widget _emptyState() {
-    return const Center(
+     final theme = Theme.of(context);
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.people_outline, size: 48, color: textMuted),
-          SizedBox(height: 12),
+          Icon(Icons.people_outline, size: 48, color: theme.disabledColor),
+          const SizedBox(height: 12),
           Text(
             "No employees found",
-            style: TextStyle(color: textMuted, fontSize: 16),
+            style: TextStyle(color: theme.disabledColor, fontSize: 16),
           ),
         ],
       ),
@@ -236,76 +240,180 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   // 🧑‍💼 EMPLOYEE CARD
   // --------------------------------------------------
   Widget _employeeCard(BuildContext context, UserModel user) {
+     final theme = Theme.of(context);
+     final isDark = theme.brightness == Brightness.dark;
+
     return InkWell(
       onTap: () {
         Navigator.pushNamed(
           context,
           AppRoutes.employeeDetails,
-          arguments: user.uid,
+          arguments: {
+            'userId': user.uid,
+            'adminDepartment': widget.adminDepartment ?? 'CSE',
+          },
         );
       },
+      borderRadius: BorderRadius.circular(20),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F172A).withOpacity(0.02),
+              color: const Color(0xFF64748B).withOpacity(0.06),
               blurRadius: 20,
               offset: const Offset(0, 8),
-            )
+            ),
           ],
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: primaryBlue.withOpacity(0.1),
-              child: Text(
-                user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: primaryBlue,
-                ),
+             // Avatar
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
+                ],
+              ),
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: user.approved ? AdminHelpers.getAvatarColor(user.name).withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+                backgroundImage: user.profilePicUrl != null && user.profilePicUrl!.isNotEmpty
+                    ? NetworkImage(user.profilePicUrl!)
+                    : null,
+                child: user.profilePicUrl != null && user.profilePicUrl!.isNotEmpty
+                    ? null
+                    : Text(
+                        user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: user.approved ? AdminHelpers.getAvatarColor(user.name) : Colors.orange,
+                        ),
+                      ),
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    user.name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: textDark,
-                    ),
+                   Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          AdminHelpers.sanitizeLabel(user.name),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B), // Slate 800
+                          ),
+                        ),
+                      ),
+                      if (!user.approved)
+                         Padding(
+                           padding: const EdgeInsets.only(left: 8.0),
+                           child: Container(
+                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                             decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange.withOpacity(0.3))),
+                             child: const Text("PENDING", style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+                           ),
+                         ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    user.department,
+                    user.manualEmployeeId != null && user.manualEmployeeId!.isNotEmpty 
+                        ? "ID: ${user.manualEmployeeId!}" 
+                        : "ID: ${user.employeeId}",
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: primaryBlue,
+                      color: Color(0xFF94A3B8), // Slate 400
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  Text(
-                    user.email,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: textMuted,
-                    ),
+                  
+                  const SizedBox(height: 6),
+                  
+                  Row(
+                    children: [
+                      if (user.designation != null && user.designation!.isNotEmpty)
+                         Text(
+                           user.department == "Placement Cell" 
+                               ? user.designation! 
+                               : "${user.designation}  •  ",
+                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+                         ),
+                      if (user.department != "Placement Cell")
+                        Text(
+                          user.department,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AdminHelpers.primaryColor,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: textMuted),
+            
+            if (!user.approved)
+               ElevatedButton(
+                 onPressed: () => _approveUser(user),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: AdminHelpers.primaryColor, 
+                   elevation: 0,
+                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+                 ),
+                 child: const Text("Approve", style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
+               )
+            else
+               const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFFCBD5E1)),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _approveUser(UserModel user) async {
+     try {
+       // Ideally currently logged in admin ID needed. Passing 'admin' for now or fetch auth
+       // Assuming auth is handled elsewhere or single admin
+       await _firestoreService.approveUser(user.uid, 'ADMIN'); 
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User Approved!")));
+     } catch(e) {
+       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+     }
+  }
+
+  Widget _buildSkeletonList() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: 8,
+      itemBuilder: (context, index) => Shimmer.fromColors(
+        baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+        highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          height: 100,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
       ),
     );
