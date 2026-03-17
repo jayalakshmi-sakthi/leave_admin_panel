@@ -19,11 +19,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   String _searchText = '';
-  String _selectedStatus = 'All'; // New Filter
-
-  // 🎨 Theme
-  // Using AdminHelpers constants directly
-  static const Color primaryBlue = AdminHelpers.secondaryColor; // Mapped to secondary for actionable logic
+  String _selectedStatus = 'All';
 
   @override
   void dispose() {
@@ -31,9 +27,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     super.dispose();
   }
 
-  // --------------------------------------------------
-  // 🖥 UI
-  // --------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return ResponsiveContainer(
@@ -46,15 +39,9 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     );
   }
 
-  // --------------------------------------------------
-  // 🔍 SEARCH & FILTER
-  // --------------------------------------------------
-  // --------------------------------------------------
-  // 🔍 SEARCH & FILTER
-  // --------------------------------------------------
   Widget _buildSearchAndFilter() {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -62,338 +49,305 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
         color: theme.cardColor,
         border: Border(bottom: BorderSide(color: theme.dividerColor, width: 1.5)),
       ),
-      child: Row(
-        children: [
-          // Search Bar
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() => _searchText = value.toLowerCase());
-              },
-              style: TextStyle(color: theme.textTheme.bodyMedium?.color),
-              decoration: InputDecoration(
-                hintText: "Search name or email...",
-                hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
-                prefixIcon: Icon(Icons.search_rounded, color: theme.iconTheme.color, size: 20),
-                filled: true,
-                fillColor: theme.scaffoldBackgroundColor,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: theme.dividerColor),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AdminHelpers.secondaryColor, width: 1.5),
-                ),
-              ),
-            ),
+      child: isDesktop 
+        ? Row(
+            children: [
+              _searchField(theme),
+              const SizedBox(width: 16),
+              _statusDropdown(theme),
+              const SizedBox(width: 8),
+            ],
+          )
+        : Column(
+            children: [
+              _searchField(theme, isFull: true),
+              const SizedBox(height: 12),
+              _statusDropdown(theme, isFull: true),
+            ],
           ),
-          const SizedBox(width: 16),
-          // Status Dropdown
-          Expanded(
-            flex: 1,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: theme.scaffoldBackgroundColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: theme.dividerColor),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedStatus,
-                  isExpanded: true,
-                  dropdownColor: theme.cardColor,
-                  icon: Icon(Icons.filter_list_rounded, color: theme.iconTheme.color, size: 18),
-                  items: ['All', 'Pending', 'Approved'].map((s) {
-                    return DropdownMenuItem(
-                      value: s,
-                      child: Text(
-                        s,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.textTheme.bodyMedium?.color),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) setState(() => _selectedStatus = value);
-                  },
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
     );
   }
 
-  // --------------------------------------------------
-  // 👥 EMPLOYEE LIST (REAL-TIME)
-  // --------------------------------------------------
+  Widget _searchField(ThemeData theme, {bool isFull = false}) {
+    final field = TextField(
+      controller: _searchController,
+      onChanged: (value) => setState(() => _searchText = value.toLowerCase()),
+      style: TextStyle(color: theme.textTheme.bodyMedium?.color),
+      decoration: InputDecoration(
+        hintText: "Search name or email...",
+        hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
+        prefixIcon: Icon(Icons.search_rounded, color: theme.iconTheme.color, size: 20),
+        filled: true,
+        fillColor: theme.scaffoldBackgroundColor,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: theme.dividerColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AdminHelpers.secondaryColor, width: 1.5),
+        ),
+      ),
+    );
+    return isFull ? field : Expanded(flex: 2, child: field);
+  }
+
+  Widget _statusDropdown(ThemeData theme, {bool isFull = false}) {
+    final dropdown = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedStatus,
+          isExpanded: true,
+          dropdownColor: theme.cardColor,
+          icon: Icon(Icons.filter_list_rounded, color: theme.iconTheme.color, size: 18),
+          items: ['All', 'Pending', 'Approved'].map((s) {
+            return DropdownMenuItem(
+              value: s,
+              child: Text(s, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.textTheme.bodyMedium?.color)),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) setState(() => _selectedStatus = value);
+          },
+        ),
+      ),
+    );
+    return isFull ? dropdown : Expanded(flex: 1, child: dropdown);
+  }
+
   Widget _buildEmployeeList() {
-    final theme = Theme.of(context);
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     
     return Expanded(
       child: StreamBuilder<List<UserModel>>(
         stream: _firestoreService.getEmployeesStream(department: widget.adminDepartment ?? 'CSE'),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return _buildSkeletonList();
-          }
+          if (snapshot.connectionState == ConnectionState.waiting) return _buildSkeletonList();
+          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+          if (!snapshot.hasData || snapshot.data!.isEmpty) return _emptyState();
 
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}", style: TextStyle(color: theme.textTheme.bodyMedium?.color)));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return _emptyState();
-          }
-
-          // Client-side search & status filtering
           final employees = snapshot.data!.where((user) {
-            final name = user.name.toLowerCase();
-            final email = user.email.toLowerCase();
-            bool matchesSearch = name.contains(_searchText) || email.contains(_searchText);
-            bool matchesStatus = _selectedStatus == 'All' 
-                ? true 
-                : (_selectedStatus == 'Pending' ? !user.approved : user.approved);
-            
+            final matchesSearch = user.name.toLowerCase().contains(_searchText) || user.email.toLowerCase().contains(_searchText);
+            final matchesStatus = _selectedStatus == 'All' ? true : (_selectedStatus == 'Pending' ? !user.approved : user.approved);
             return matchesSearch && matchesStatus;
           }).toList();
 
-          if (employees.isEmpty) {
-            return _emptyState();
-          }
+          if (employees.isEmpty) return _emptyState();
 
-          return Column(
-            children: [
-              // 📊 STATS HEADER
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                   Text(
-                      "All Employees",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.bodySmall?.color,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: primaryBlue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "Total: ${employees.length}",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: employees.length,
-                  itemBuilder: (context, index) {
-                    return _employeeCard(context, employees[index]);
-                  },
-                ),
-              ),
-            ],
-          );
+          return isDesktop 
+              ? _buildDesktopTable(employees)
+              : _buildMobileList(employees);
         },
       ),
     );
   }
 
-  Widget _emptyState() {
-     final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.people_outline, size: 48, color: theme.disabledColor),
-          const SizedBox(height: 12),
-          Text(
-            "No employees found",
-            style: TextStyle(color: theme.disabledColor, fontSize: 16),
+  Widget _buildMobileList(List<UserModel> employees) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: employees.length,
+      itemBuilder: (context, index) {
+        final user = employees[index];
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
-        ],
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: AdminHelpers.getAvatarColor(user.name).withOpacity(0.1),
+                      backgroundImage: user.profilePicUrl?.isNotEmpty == true ? NetworkImage(user.profilePicUrl!) : null,
+                      child: user.profilePicUrl?.isNotEmpty == true ? null : Text(user.name[0].toUpperCase(), style: TextStyle(color: AdminHelpers.getAvatarColor(user.name))),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(user.manualEmployeeId ?? user.employeeId, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    _statusBadge(user.approved ? 'Approved' : 'Pending'),
+                  ],
+                ),
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _deptBadge(user.department),
+                    Text(user.designation ?? 'N/A', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (!user.approved)
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _approveUser(user),
+                          icon: const Icon(Icons.check, size: 18),
+                          label: const Text("Approve"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00A389),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    if (!user.approved) const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.pushNamed(context, AppRoutes.employeeDetails, arguments: {'userId': user.uid, 'adminDepartment': widget.adminDepartment ?? 'CSE'}),
+                        icon: const Icon(Icons.visibility, size: 18),
+                        label: const Text("View Details"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminHelpers.primaryColor,
+                          side: const BorderSide(color: AdminHelpers.primaryColor),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopTable(List<UserModel> employees) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                    headingTextStyle: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12),
+                    dataRowHeight: 70,
+                    columnSpacing: (constraints.maxWidth - 640) / 5 > 20 ? (constraints.maxWidth - 640) / 5 : 20,
+                    horizontalMargin: 20,
+                    columns: const [
+                      DataColumn(label: Text("STAFF")),
+                      DataColumn(label: Text("ID")),
+                      DataColumn(label: Text("DEPARTMENT")),
+                      DataColumn(label: Text("DESIGNATION")),
+                      DataColumn(label: Text("STATUS")),
+                      DataColumn(label: Text("ACTIONS")),
+                    ],
+              rows: employees.map((user) => DataRow(
+                cells: [
+                  DataCell(Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(radius: 18, backgroundColor: AdminHelpers.getAvatarColor(user.name).withOpacity(0.1), backgroundImage: user.profilePicUrl?.isNotEmpty == true ? NetworkImage(user.profilePicUrl!) : null, child: user.profilePicUrl?.isNotEmpty == true ? null : Text(user.name[0].toUpperCase(), style: TextStyle(color: AdminHelpers.getAvatarColor(user.name)))),
+                      const SizedBox(width: 12),
+                      Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  )),
+                  DataCell(Text(user.manualEmployeeId ?? user.employeeId, style: const TextStyle(fontSize: 13))),
+                  DataCell(_deptBadge(user.department)),
+                  DataCell(Text(user.designation ?? 'N/A', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)))),
+                  DataCell(_statusBadge(user.approved ? 'Approved' : 'Pending')),
+                  DataCell(Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!user.approved) IconButton(icon: const Icon(Icons.check_circle_outline, color: Color(0xFF00A389), size: 20), onPressed: () => _approveUser(user)),
+                      IconButton(icon: const Icon(Icons.visibility_outlined, color: Color(0xFF001C3D), size: 20), onPressed: () => Navigator.pushNamed(context, AppRoutes.employeeDetails, arguments: {'userId': user.uid, 'adminDepartment': widget.adminDepartment ?? 'CSE'})),
+                    ],
+                  )),
+                ],
+              )).toList(),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
 
-  // --------------------------------------------------
-  // 🧑‍💼 EMPLOYEE CARD
-  // --------------------------------------------------
-  Widget _employeeCard(BuildContext context, UserModel user) {
-     final theme = Theme.of(context);
-     final isDark = theme.brightness == Brightness.dark;
+  Widget _statusBadge(String status) {
+    final color = status == 'Approved' ? const Color(0xFF00A389) : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
 
-    return InkWell(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.employeeDetails,
-          arguments: {
-            'userId': user.uid,
-            'adminDepartment': widget.adminDepartment ?? 'CSE',
-          },
-        );
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF64748B).withOpacity(0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-        ),
-        child: Row(
-          children: [
-             // Avatar
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4),
-                ],
-              ),
-              child: CircleAvatar(
-                radius: 26,
-                backgroundColor: user.approved ? AdminHelpers.getAvatarColor(user.name).withOpacity(0.12) : Colors.orange.withOpacity(0.12),
-                backgroundImage: user.profilePicUrl != null && user.profilePicUrl!.isNotEmpty
-                    ? NetworkImage(user.profilePicUrl!)
-                    : null,
-                child: user.profilePicUrl != null && user.profilePicUrl!.isNotEmpty
-                    ? null
-                    : Text(
-                        user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: user.approved ? AdminHelpers.getAvatarColor(user.name) : Colors.orange,
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          AdminHelpers.sanitizeLabel(user.name),
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B), // Slate 800
-                          ),
-                        ),
-                      ),
-                      if (!user.approved)
-                         Padding(
-                           padding: const EdgeInsets.only(left: 8.0),
-                           child: Container(
-                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                             decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange.withOpacity(0.3))),
-                             child: const Text("PENDING", style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
-                           ),
-                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    user.manualEmployeeId != null && user.manualEmployeeId!.isNotEmpty 
-                        ? "ID: ${user.manualEmployeeId!}" 
-                        : "ID: ${user.employeeId}",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF94A3B8), // Slate 400
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 6),
-                  
-                  Row(
-                    children: [
-                      if (user.designation != null && user.designation!.isNotEmpty)
-                         Text(
-                           user.department == "Placement Cell" 
-                               ? user.designation! 
-                               : "${user.designation}  •  ",
-                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
-                         ),
-                      if (user.department != "Placement Cell")
-                        Text(
-                          user.department,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AdminHelpers.primaryColor,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            
-            if (!user.approved)
-               ElevatedButton(
-                 onPressed: () => _approveUser(user),
-                 style: ElevatedButton.styleFrom(
-                   backgroundColor: AdminHelpers.primaryColor, 
-                   elevation: 0,
-                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
-                 ),
-                 child: const Text("Approve", style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
-               )
-            else
-               const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFFCBD5E1)),
-          ],
-        ),
+  Widget _deptBadge(String dept) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        dept,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.people_outline_rounded, size: 60, color: Color(0xFFCBD5E1)),
+          SizedBox(height: 16),
+          Text("No employees found", style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
 
   void _approveUser(UserModel user) async {
      try {
-       // Ideally currently logged in admin ID needed. Passing 'admin' for now or fetch auth
-       // Assuming auth is handled elsewhere or single admin
        await _firestoreService.approveUser(user.uid, 'ADMIN'); 
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User Approved!")));
+       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User Approved!")));
      } catch(e) {
-       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
      }
   }
 
@@ -412,7 +366,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           height: 100,
           decoration: BoxDecoration(
             color: theme.cardColor,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),

@@ -78,7 +78,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       // 1. Handle "New User" or Registration notifications
       if (type == 'new_user' || (data['title']?.toString().toLowerCase().contains('registration') ?? false)) {
-         setState(() => _selectedIndex = 4); // Index for Users/Settings if needed
+         setState(() => _selectedIndex = 4); 
          Navigator.pushNamed(context, '/pending-users'); // Adjust route as needed
          return;
       }
@@ -103,18 +103,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             arguments: {'id': relatedId, 'academicYearId': academicYearId},
           );
         } else if (type == 'comp_off_request' || leaveType == 'COMP' || leaveType == 'Comp-Off Earn') {
-          // Fetch fresh data for detailed view
-          final doc = await FirebaseFirestore.instance
-              .collection('compOffRequests')
-              .doc(_adminDepartment)
-              .collection('records')
-              .doc(relatedId)
-              .get();
-          if (doc.exists && mounted) {
+          // Fetch fresh data for detailed view (using isolated department path)
+          final String? targetDept = data['targetDepartment'];
+          DocumentSnapshot? doc;
+
+          if (targetDept != null && targetDept.isNotEmpty) {
+             doc = await FirebaseFirestore.instance
+                 .collection('compOffRequests')
+                 .doc(targetDept)
+                 .collection('records')
+                 .doc(relatedId)
+                 .get();
+          }
+
+          if (doc == null || !doc.exists) {
+             // Search across all groups if path is ambiguous
+             final search = await FirebaseFirestore.instance
+                  .collectionGroup('records')
+                  .where('applicationId', isEqualTo: relatedId)
+                  .get();
+             if (search.docs.isNotEmpty) doc = search.docs.first;
+          }
+
+          if (doc != null && doc.exists && mounted) {
             Navigator.pushNamed(
               context,
               AppRoutes.adminCompOffDetails,
-              arguments: {'docId': relatedId, 'data': doc.data()!},
+              arguments: {'docId': doc.id, 'data': doc.data()!},
             );
           }
         }
@@ -125,18 +140,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
        final uid = FirebaseAuth.instance.currentUser!.uid;
        notifService.listenForNewNotifications(uid);
        
-       // 🔔 Real-time UI Alerts (Floating)
-       notifService.uiNotificationStream.listen((data) {
-         if (!mounted) return;
-         FloatingNotification.show(
-           context, 
-           title: AdminHelpers.sanitizeLabel(data['title'] ?? 'New Notification'),
-           body: AdminHelpers.sanitizeLabel(data['body'] ?? ''),
-           onTap: () {
-             // Handle navigation logic here if needed
-           },
-         );
-       });
+        // 🔔 Real-time UI Alerts (Floating)
+        notifService.uiNotificationStream.listen((data) {
+          if (!mounted) return;
+          
+          // 🛡️ Filter by Department (Isolation)
+          final target = data['targetDepartment']?.toString();
+          if (_adminDepartment != 'All' && target != null && target != _adminDepartment) {
+            debugPrint("🔇 Muting dashboard alert for $target (Selected: $_adminDepartment)");
+            return;
+          }
+
+          FloatingNotification.show(
+            context,
+            title: AdminHelpers.sanitizeLabel(data['title'] ?? 'New Alert'),
+            body: AdminHelpers.sanitizeLabel(data['body'] ?? ''),
+          );
+        });
     }
   }
 
@@ -264,7 +284,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool isDesktop = constraints.maxWidth >= 900;
-        final bool isTablet = constraints.maxWidth >= 600 && constraints.maxWidth < 900;
 
         return Scaffold(
           backgroundColor: AdminHelpers.scaffoldBg, // Light Blue-Grey
@@ -274,6 +293,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   elevation: 0,
                   iconTheme: const IconThemeData(color: Colors.white),
                   title: const Text("LeaveX", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  actions: [
+                     _buildNotificationIcon(),
+                     const SizedBox(width: 4),
+                     _buildAdminAvatar(),
+                     const SizedBox(width: 16),
+                  ],
                 )
               : null,
           drawer: !isDesktop
@@ -282,6 +307,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   child: DarkSidebar(
                     selectedIndex: _selectedIndex,
                     isDesktop: false,
+                    profilePicUrl: _adminProfilePic, // ✅ Added
                     onItemSelected: (index) {
                       if (index == -1) {
                          _logout();
@@ -300,6 +326,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 DarkSidebar(
                   selectedIndex: _selectedIndex,
                   isDesktop: true,
+                  profilePicUrl: _adminProfilePic, // ✅ Added
                   onItemSelected: (index) {
                     if (index == -1) {
                        _logout();
@@ -313,81 +340,109 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: Column(
                   children: [
-                    // 🔍 TOP BAR (Search & Profile)
-                    Container(
-                      height: 80,
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                      ),
-                      child: Row(
-                        children: [
-                           // User Greeting
-                           Column(
-                             mainAxisAlignment: MainAxisAlignment.center,
-                             crossAxisAlignment: CrossAxisAlignment.start,
-                             children: [
-                               Text(
-                                 "Hello, ${_isSuperAdmin ? 'Super Admin' : 'Admin'}",
-                                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AdminHelpers.primaryColor),
+                    // 🔍 TOP BAR (Search & Profile) - Desktop Only
+                    if (isDesktop)
+                      Container(
+                        height: 80,
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                        ),
+                        child: Row(
+                          children: [
+                             // User Greeting
+                             Column(
+                               mainAxisAlignment: MainAxisAlignment.center,
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Text(
+                                   "Hello, ${_isSuperAdmin ? 'Super Admin' : '$_adminDepartment Admin'}",
+                                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AdminHelpers.primaryColor),
+                                 ),
+                                 Text(
+                                   "Here's what's happening today.",
+                                   style: const TextStyle(fontSize: 12, color: AdminHelpers.textMuted),
+                                 ),
+                               ],
+                             ),
+                             const Spacer(),
+                             
+                             // Department Dropdown (Super Admin Only)
+                             if (_isSuperAdmin) ...[
+                               Container(
+                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                 decoration: BoxDecoration(
+                                   color: AdminHelpers.scaffoldBg,
+                                   borderRadius: BorderRadius.circular(10),
+                                 ),
+                                 child: DropdownButtonHideUnderline(
+                                   child: DropdownButton<String>(
+                                     value: AdminHelpers.departments.contains(_adminDepartment) ? _adminDepartment : 'All',
+                                     icon: const Icon(Icons.business_rounded, color: AdminHelpers.textMuted, size: 18),
+                                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AdminHelpers.textMain),
+                                     items: AdminHelpers.departments.map((d) {
+                                       final color = AdminHelpers.getDeptColor(d);
+                                       final icon = AdminHelpers.getDeptIcon(d);
+                                       return DropdownMenuItem(
+                                         value: d, 
+                                         child: Row(
+                                           mainAxisSize: MainAxisSize.min,
+                                           children: [
+                                             Container(
+                                               padding: const EdgeInsets.all(4),
+                                               decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                                               child: Icon(icon, color: color, size: 10),
+                                             ),
+                                             const SizedBox(width: 8),
+                                             Text(d),
+                                           ],
+                                         )
+                                       );
+                                     }).toList(),
+                                     onChanged: (val) {
+                                       if (val != null) setState(() => _adminDepartment = val);
+                                     },
+                                   ),
+                                 ),
                                ),
-                               Text(
-                                 "Here's what's happening today.",
-                                 style: const TextStyle(fontSize: 13, color: AdminHelpers.textMuted),
-                               ),
+                               const SizedBox(width: 12),
                              ],
-                           ),
-                           const Spacer(),
-                           
-                           // Academic Year Dropdown
-                           Container(
-                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                             decoration: BoxDecoration(
-                               color: AdminHelpers.scaffoldBg,
-                               borderRadius: BorderRadius.circular(12),
-                             ),
-                             child: DropdownButtonHideUnderline(
-                               child: DropdownButton<String>(
-                                 value: _selectedAcademicYear,
-                                 icon: const Icon(Icons.arrow_drop_down, color: AdminHelpers.textMuted),
-                                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AdminHelpers.textMain),
-                                 items: _academicYears.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
-                                 onChanged: (val) {
-                                   if (val != null) setState(() => _selectedAcademicYear = val);
-                                 },
+                             
+                             // Academic Year Dropdown
+                             if (_selectedIndex != 4 && _selectedIndex != 6)
+                               Container(
+                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                 decoration: BoxDecoration(
+                                   color: AdminHelpers.scaffoldBg,
+                                   borderRadius: BorderRadius.circular(10),
+                                 ),
+                                 child: DropdownButtonHideUnderline(
+                                   child: DropdownButton<String>(
+                                     value: _selectedAcademicYear,
+                                     icon: const Icon(Icons.arrow_drop_down, color: AdminHelpers.textMuted),
+                                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AdminHelpers.textMain),
+                                     items: _academicYears.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
+                                     onChanged: (val) {
+                                       if (val != null) setState(() => _selectedAcademicYear = val);
+                                     },
+                                   ),
+                                 ),
                                ),
-                             ),
-                           ),
-                           const SizedBox(width: 16),
-                           
-                           // Notifications
-                           StreamBuilder<int>(
-                              stream: NotificationService().getUnreadCount(FirebaseAuth.instance.currentUser?.uid ?? ''),
-                              builder: (context, snapshot) {
-                                final count = snapshot.data ?? 0;
-                                return Stack(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.notifications_none_rounded, color: AdminHelpers.textMuted, size: 28),
-                                      onPressed: () => setState(() => _selectedIndex = 4),
-                                    ),
-                                    if (count > 0)
-                                      Positioned(
-                                        right: 8, top: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                          child: Text("$count", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                        ),
-                                      ),
-                                  ],
-                                );
-                              }
-                           ),
-                        ],
+                             const SizedBox(width: 20),
+                             
+                             // Notifications
+                             _buildNotificationIcon(),
+                             
+                             const SizedBox(width: 12),
+                             const VerticalDivider(width: 1, indent: 25, endIndent: 25),
+                             const SizedBox(width: 12),
+
+                             // Profile Pic
+                             _buildAdminAvatar(),
+                          ],
+                        ),
                       ),
-                    ),
                     
                     // CONTENT BODY
                     Expanded(
@@ -406,8 +461,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-
-
   Widget _pageWithDependencies() {
     switch (_selectedIndex) {
       case 0:
@@ -419,18 +472,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       case 3:
         return CompOffRequestsScreen(selectedYear: _selectedAcademicYear, adminDepartment: _adminDepartment); // ✅ Fixed Index
       case 4:
-        return const AdminNotificationsScreen(); 
+        return AdminNotificationsScreen(departmentFilter: _adminDepartment); 
       case 5:
         return DepartmentCalendarScreen(); // ✅ Reverted name
       case 6:
-        return const SettingsScreen();
+        return SettingsScreen(adminDepartment: _adminDepartment);
       default:
         return const SizedBox.shrink();
     }
   }
-
-
-
 
   Future<void> _logout() async {
     await FirebaseAuth.instance.signOut();
@@ -439,6 +489,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       context,
       AppRoutes.adminLogin,
       (_) => false,
+    );
+  }
+
+  Widget _buildAdminAvatar() {
+    final hasPic = _adminProfilePic != null && _adminProfilePic!.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: AdminHelpers.primaryColor.withOpacity(0.1), width: 2),
+      ),
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.white,
+        backgroundImage: hasPic ? NetworkImage(_adminProfilePic!) : null,
+        child: !hasPic 
+            ? const Icon(Icons.person_rounded, color: AdminHelpers.primaryColor, size: 20)
+            : null,
+      ),
+    );
+  }
+
+
+  Widget _buildNotificationIcon() {
+    return StreamBuilder<int>(
+      stream: NotificationService().getUnreadCount(FirebaseAuth.instance.currentUser?.uid ?? ''),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        return Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded, color: AdminHelpers.textMuted, size: 26),
+              onPressed: () => setState(() => _selectedIndex = 4),
+            ),
+            if (count > 0)
+              Positioned(
+                right: 8, top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                  child: Text(
+                    "$count", 
+                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      }
     );
   }
 }
@@ -535,28 +636,30 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Switch to Wrap/Grid if width is small
-        if (constraints.maxWidth < 600) {
+        // Dynamic Spacing based on width
+        final double spacing = constraints.maxWidth < 600 ? 12 : 24;
+        
+        if (constraints.maxWidth < 700) {
           return Wrap(
-            spacing: 12,
-            runSpacing: 12,
+            spacing: spacing,
+            runSpacing: spacing,
             children: [
-              _statCard(total, "Total", Icons.people_outline, const Color(0xFF3399CC), width: (constraints.maxWidth - 36) / 2),
-              _statCard(pending, "Pending", Icons.insert_chart_outlined, const Color(0xFFF59E0B), width: (constraints.maxWidth - 36) / 2),
-              _statCard(approved, "Approved", Icons.task_alt, const Color(0xFF8CC63F), width: (constraints.maxWidth - 36) / 2),
-              _statCard(rejected, "Rejected", Icons.close_rounded, const Color(0xFFEF4444), width: (constraints.maxWidth - 36) / 2),
+              _statCard(total, "Total", Icons.folder_copy_rounded, AdminHelpers.primaryColor, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger, width: (constraints.maxWidth - spacing - 2) / 2),
             ],
           );
         }
         return Row(
           children: [
-            Expanded(child: _statCard(total, "Total Records", Icons.folder_open_rounded, AdminHelpers.primaryColor)),
-             const SizedBox(width: 16),
-            Expanded(child: _statCard(pending, "Pending Approval", Icons.hourglass_empty_rounded, const Color(0xFFF59E0B))),
-             const SizedBox(width: 16),
-            Expanded(child: _statCard(approved, "Approved Requests", Icons.verified_rounded, AdminHelpers.success)),
-             const SizedBox(width: 16),
-            Expanded(child: _statCard(rejected, "Rejected / Cancelled", Icons.block_flipped, const Color(0xFFEF4444))),
+            Expanded(child: _statCard(total, "Total Records", Icons.folder_copy_rounded, AdminHelpers.primaryColor)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(pending, "Pending Approval", Icons.hourglass_top_rounded, AdminHelpers.warning)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(approved, "Approved Requests", Icons.verified_user_rounded, AdminHelpers.success)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(rejected, "Rejected / Cancelled", Icons.cancel_presentation_rounded, AdminHelpers.danger)),
           ],
         );
       }
@@ -564,27 +667,17 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
   }
 
   Widget _statCard(int value, String label, IconData icon, Color color, {double? width}) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
       width: width,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-        gradient: LinearGradient(
-          colors: [
-            color.withOpacity(0.1),
-            color.withOpacity(0.02),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-           BoxShadow(
-             color: color.withOpacity(0.05), 
-             blurRadius: 10, 
-             offset: const Offset(0, 4)
-           )
+        color: isDark ? AdminHelpers.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AdminHelpers.darkBorder : color.withOpacity(0.12), width: 1.5),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
         ],
       ),
       child: Column(
@@ -600,9 +693,25 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
             child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(height: 20),
-          Text(value.toString(), style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -1.0, color: color)),
+          Text(
+            value.toString(), 
+            style: TextStyle(
+              fontSize: 32, 
+              fontWeight: FontWeight.w900, 
+              letterSpacing: -1.0, 
+              color: isDark ? Colors.white : AdminHelpers.textMain
+            )
+          ),
           const SizedBox(height: 4),
-          Text(label.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color.withOpacity(0.7), letterSpacing: 0.5)),
+          Text(
+            label.toUpperCase(), 
+            style: TextStyle(
+              fontSize: 11, 
+              fontWeight: FontWeight.bold, 
+              color: isDark ? Colors.grey[400] : AdminHelpers.textMuted, 
+              letterSpacing: 0.8
+            )
+          ),
         ],
       ),
     );
@@ -645,309 +754,285 @@ class _RequestsList extends StatelessWidget {
       );
     }
 
-    final FirestoreService firestoreService = FirestoreService();
-    final auth = FirebaseAuth.instance;
-    final notificationService = NotificationService(); // ✅ Added
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(24),
-      shrinkWrap: true, // ✅ Added
-      physics: const NeverScrollableScrollPhysics(), // ✅ Added
-      itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        final req = filtered[index];
-        return _LeaveCard(
-          request: req,
-          firestoreService: firestoreService, // Pass service
-          onUpdateStatus: (status) async {
-            await firestoreService.updateLeaveStatus(
-              req.id,
-              status,
-              auth.currentUser?.uid ?? 'admin',
-              department: req.department ?? 'CSE',
-            );
-
-            // 🔔 SEND NOTIFICATION TO USER
-            await notificationService.sendNotification(
-              toUserId: req.userId,
-              title: 'Leave Request Status Updated',
-              body: 'Your ${AdminHelpers.getLeaveName(req.leaveType)} from ${DateFormat('MMM dd').format(req.fromDate)} has been $status.',
-              type: 'status_change',
-              relatedId: req.id,
-            );
-          },
-        );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return _buildMobileList(filtered, context, isDark);
+        }
+        return _buildDesktopTable(filtered, context, isDark, constraints);
       },
     );
   }
-}
 
-class _LeaveCard extends StatelessWidget {
-  final LeaveRequestModel request;
-  final Function(String) onUpdateStatus;
-  final FirestoreService firestoreService;
+  Widget _buildDesktopTable(List<LeaveRequestModel> filtered, BuildContext context, bool isDark, BoxConstraints constraints) {
+    final auth = FirebaseAuth.instance;
+    final firestoreService = FirestoreService();
+    final notificationService = NotificationService();
 
-  const _LeaveCard({
-    required this.request, 
-    required this.onUpdateStatus,
-    required this.firestoreService,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final leaveType = request.leaveType.toString();
-    final statusColor = AdminHelpers.getStatusColor(request.status);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return StreamBuilder<UserModel>(
-      stream: firestoreService.getUserStream(request.userId),
-      builder: (context, snapshot) {
-        final user = snapshot.data;
-        final displayName = user?.name ?? request.userName;
-        final displayId = user?.manualEmployeeId ?? user?.employeeId ?? request.employeeId ?? 'N/A';
-        final displayPic = user?.profilePicUrl;
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF64748B).withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1), // Slate 200
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? AdminHelpers.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? AdminHelpers.darkBorder : const Color(0xFFE2E8F0)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(isDark ? AdminHelpers.primaryColor.withOpacity(0.8) : const Color(0xFF001C3D)),
+              headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              dataRowHeight: 70,
+              columnSpacing: (constraints.maxWidth - 640) / 6 > 24 ? (constraints.maxWidth - 640) / 6 : 24,
+              horizontalMargin: 20,
+              columns: const [
+                DataColumn(label: Text("STAFF NAME")),
+                DataColumn(label: Text("DATE")),
+                DataColumn(label: Text("TYPE")),
+                DataColumn(label: Text("DAYS")),
+                DataColumn(label: Text("REASON")),
+                DataColumn(label: Text("STATUS")),
+                DataColumn(label: Text("ACTIONS")),
+              ],
+              rows: filtered.map((req) {
+                final textColor = isDark ? Colors.white : AdminHelpers.textMain;
+                final subColor = isDark ? Colors.grey[400] : const Color(0xFF64748B);
+                return DataRow(
+                  cells: [
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
+                            child: Text(req.userName.isNotEmpty ? req.userName[0] : '?',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(req.userName))),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(req.userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                                  if (dept == 'All' && req.department != null) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: AdminHelpers.getDeptColor(req.department!).withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        AdminHelpers.getDeptIcon(req.department!),
+                                        size: 10,
+                                        color: AdminHelpers.getDeptColor(req.department!),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              Text(req.employeeId ?? 'N/A', style: TextStyle(fontSize: 11, color: subColor)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            req.fromDate == req.toDate 
+                              ? DateFormat('dd MMM yyyy').format(req.fromDate)
+                              : "${DateFormat('dd MMM').format(req.fromDate)} - ${DateFormat('dd MMM yyyy').format(req.toDate)}",
+                            style: TextStyle(fontSize: 13, color: textColor)
+                          ),
+                          if (req.isHalfDay)
+                            Text("(${req.halfDaySession})", style: TextStyle(fontSize: 10, color: subColor, fontWeight: FontWeight.bold)),
+                        ],
+                      )
+                    ),
+                    DataCell(_typeBadge(req.leaveType)),
+                    DataCell(Text("${req.numberOfDays}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor))),
+                    DataCell(
+                      SizedBox(
+                        width: 150,
+                        child: Text(
+                          req.reason,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: subColor),
+                        ),
+                      ),
+                    ),
+                    DataCell(_statusBadge(req.status)),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (req.status == 'Pending') ...[
+                            IconButton(
+                              icon: const Icon(Icons.check_circle_outline, color: Color(0xFF00A389), size: 20),
+                              onPressed: () async {
+                                final adminId = auth.currentUser?.uid ?? '';
+                                await firestoreService.updateLeaveStatus(req.id, 'Approved', adminId, department: dept);
+                                notificationService.sendLeaveStatusNotification(
+                                  userId: req.userId,
+                                  status: 'Approved',
+                                  leaveType: req.leaveType,
+                                  fromDate: req.fromDate,
+                                );
+                              },
+                              tooltip: 'Approve',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.highlight_off_rounded, color: Colors.red, size: 20),
+                              onPressed: () async {
+                                final adminId = auth.currentUser?.uid ?? '';
+                                await firestoreService.updateLeaveStatus(req.id, 'Rejected', adminId, department: dept);
+                                notificationService.sendLeaveStatusNotification(
+                                  userId: req.userId,
+                                  status: 'Rejected',
+                                  leaveType: req.leaveType,
+                                  fromDate: req.fromDate,
+                                );
+                              },
+                              tooltip: 'Reject',
+                            ),
+                          ],
+                          IconButton(
+                            icon: Icon(Icons.visibility_outlined, color: isDark ? Colors.blue[300] : const Color(0xFF001C3D), size: 20),
+                            onPressed: () => Navigator.pushNamed(
+                              context,
+                              AppRoutes.leaveRequestDetails,
+                              arguments: {'id': req.id, 'academicYearId': year},
+                            ),
+                            tooltip: 'View Details',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
           ),
-          child: Column(
-            children: [
-              // 1️⃣ HEADER: Clean & Spacious
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                child: Row(
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileList(List<LeaveRequestModel> filtered, BuildContext context, bool isDark) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: filtered.length,
+      itemBuilder: (context, index) {
+        final req = filtered[index];
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: isDark ? AdminHelpers.darkBorder : const Color(0xFFE2E8F0)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
                   children: [
                     CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AdminHelpers.getAvatarColor(displayName).withOpacity(0.1),
-                      backgroundImage: displayPic != null ? NetworkImage(displayPic) : null,
-                      child: displayPic == null
-                          ? Text(displayName.isNotEmpty ? displayName[0] : '?',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(displayName)))
-                          : null,
+                      radius: 20,
+                      backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
+                      child: Text(req.userName.isNotEmpty ? req.userName[0] : '?',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(req.userName))),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(displayName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-                          Text(displayId, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                          Text(req.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text("${req.leaveType} • ${req.numberOfDays} Days", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                         ],
                       ),
                     ),
-                    _statusBadge(request.status),
+                    _statusBadge(req.status),
                   ],
                 ),
-              ),
-
-              const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)), // Subtle Divider
-
-              // 2️⃣ INFO GRID: Clean, no heavy boxes
-              // 2️⃣ INFO GRID: Differentiated Sections
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Type
-                        Expanded(
-                          child: Container(
-                             padding: const EdgeInsets.all(12),
-                             decoration: BoxDecoration(
-                               color: const Color(0xFFF8FAFC), // Slate 50
-                               borderRadius: BorderRadius.circular(12),
-                               border: Border.all(color: const Color(0xFFF1F5F9)),
-                             ),
-                             child: Column(
-                               crossAxisAlignment: CrossAxisAlignment.start,
-                               children: [
-                                 Row(children: [
-                                   Icon(Icons.category_outlined, size: 14, color: theme.disabledColor),
-                                   const SizedBox(width: 6),
-                                   Text("LEAVE TYPE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.disabledColor, letterSpacing: 0.5)),
-                                 ]),
-                                 const SizedBox(height: 8),
-                                 Container(
-                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                   decoration: BoxDecoration(
-                                     color: AdminHelpers.getLeaveColor(leaveType).withOpacity(0.1),
-                                     borderRadius: BorderRadius.circular(6),
-                                   ),
-                                   child: Text(
-                                     AdminHelpers.getLeaveName(leaveType),
-                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AdminHelpers.getLeaveColor(leaveType)),
-                                   ),
-                                 ),
-                               ],
-                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Duration
-                        Expanded(
-                          child: Container(
-                             padding: const EdgeInsets.all(12),
-                             decoration: BoxDecoration(
-                               color: const Color(0xFFF8FAFC), // Slate 50
-                               borderRadius: BorderRadius.circular(12),
-                               border: Border.all(color: const Color(0xFFF1F5F9)),
-                             ),
-                             child: Column(
-                               crossAxisAlignment: CrossAxisAlignment.start,
-                               children: [
-                                 Row(children: [
-                                   Icon(Icons.timer_outlined, size: 14, color: theme.disabledColor),
-                                   const SizedBox(width: 6),
-                                   Text("DURATION", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.disabledColor, letterSpacing: 0.5)),
-                                 ]),
-                                 const SizedBox(height: 8),
-                                 Text("${request.numberOfDays} Days", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
-                               ],
-                             ),
-                          ),
+                        const Text("PERIOD", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text(
+                          req.fromDate == req.toDate 
+                            ? DateFormat('dd MMM yyyy').format(req.fromDate)
+                            : "${DateFormat('dd MMM').format(req.fromDate)} - ${DateFormat('dd MMM yyyy').format(req.toDate)}",
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    // Period
-                    Container(
-                       width: double.infinity,
-                       padding: const EdgeInsets.all(12),
-                       decoration: BoxDecoration(
-                         color: const Color(0xFFF8FAFC), // Slate 50
-                         borderRadius: BorderRadius.circular(12),
-                         border: Border.all(color: const Color(0xFFF1F5F9)),
-                       ),
-                       child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                             Row(children: [
-                               Icon(Icons.date_range_outlined, size: 14, color: theme.disabledColor),
-                               const SizedBox(width: 6),
-                               Text("PERIOD", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.disabledColor, letterSpacing: 0.5)),
-                             ]),
-                             const SizedBox(height: 8),
-                             Text(
-                               "${DateFormat('EEE, MMM dd').format(request.fromDate)}  ➔  ${DateFormat('EEE, MMM dd').format(request.toDate)}",
-                               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
-                             ),
-                          ],
-                       ),
+                    TextButton.icon(
+                      onPressed: () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.leaveRequestDetails,
+                        arguments: {'id': req.id, 'academicYearId': year},
+                      ),
+                      icon: const Icon(Icons.visibility_outlined, size: 16),
+                      label: const Text("View"),
                     ),
                   ],
                 ),
-              ),
-
-              // 3️⃣ ACTIONS
-              if (request.status == 'Pending') ...[
-                const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextButton.icon(
-                          onPressed: () {
-                             Navigator.push(context, MaterialPageRoute(builder: (_) => LeaveRequestDetailScreen(request: request)));
-                          },
-                          icon: const Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF64748B)),
-                          label: const Text("View Details", style: TextStyle(color: Color(0xFF64748B))),
-                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => onUpdateStatus('Rejected'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Color(0xFFFFE4E6)),
-                            backgroundColor: const Color(0xFFFEF2F2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text("Reject", style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                         child: ElevatedButton(
-                          onPressed: () => onUpdateStatus('Approved'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AdminHelpers.primaryColor, // Violet 600
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text("Approve", style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else ...[
-                 // If not pending, just show View Details
-                 Padding(
-                   padding: const EdgeInsets.symmetric(vertical: 8),
-                   child: Center(
-                     child: TextButton.icon(
-                        onPressed: () {
-                           Navigator.push(context, MaterialPageRoute(builder: (_) => LeaveRequestDetailScreen(request: request)));
-                        },
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF7C3AED)),
-                        label: const Text("View Full Details", style: TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold)),
-                     ),
-                   ),
-                 )
-              ]
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _label(String text) => Text(
-    text, 
-    style: const TextStyle(
-      fontSize: 11, 
-      fontWeight: FontWeight.bold, 
-      color: Color(0xFF94A3B8), // Slate 400
-      letterSpacing: 0.5
-    )
-  );
-
   Widget _statusBadge(String status) {
-    Color bg;
-    Color text;
-    switch (status) {
-      case 'Approved': bg = const Color(0xFFDCFCE7); text = const Color(0xFF15803D); break;
-      case 'Rejected': bg = const Color(0xFFFEE2E2); text = const Color(0xFFB91C1C); break;
-      default: bg = const Color(0xFFFEF3C7); text = const Color(0xFFB45309); break;
-    }
+    final color = AdminHelpers.getStatusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: text)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _typeBadge(String type) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        type,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+      ),
     );
   }
 }
-
-

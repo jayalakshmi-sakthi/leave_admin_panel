@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:async';
 import 'dart:convert'; // ✅ Added for JSON
+import 'package:intl/intl.dart';
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -44,19 +45,12 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint('Got a message whilst in the foreground!');
       debugPrint('Message data: ${message.data}');
-
-      if (message.notification != null) {
-        debugPrint('Message also contained a notification: ${message.notification}');
-         // Show Local Notification if not web
-         if (!kIsWeb) {
-            showLocalNotification(
-              id: message.hashCode,
-              title: message.notification?.title ?? 'New Alert',
-              body: message.notification?.body ?? '',
-              payload: jsonEncode(message.data), // Pass FCM data as payload
-            );
-         }
-      }
+      // Broadcast to UI regardless (data only or notification data)
+      _uiController.add(message.data);
+      
+      // Skip System Tray Notification in Foreground for Admin Panel 
+      // because listenForNewNotifications already handles the Firestore document added.
+      debugPrint("🔔 FCM Foreground Message (Payload Only): ${message.data}");
     });
 
     // 4. Handle Background Click (App Opened)
@@ -155,6 +149,72 @@ class NotificationService {
     }
   }
 
+  Future<void> notifyAdmins({
+    required String title,
+    required String body,
+    String? type,
+    String? relatedId,
+    String? leaveType,
+    String? academicYearId,
+    String? targetDepartment,
+    String? triggeringUserId,
+  }) async {
+    try {
+      final sanitizedTarget = targetDepartment?.trim();
+      
+      // 1. Fetch ALL admins/super_admins
+      final adminsSnap = await _db.collection('users')
+          .where('role', whereIn: ['admin', 'super_admin'])
+          .get();
+      
+      final Set<String> recipientIds = {};
+
+      for (var doc in adminsSnap.docs) {
+          if (doc.id == triggeringUserId) continue;
+
+          final data = doc.data();
+          final String role = data['role'] ?? 'staff';
+          final String? adminDept = (data['department'] as String?)?.trim();
+          
+          bool shouldNotify = false;
+
+          // A. Super Admins (Always get everything)
+          if (role == 'super_admin') {
+            shouldNotify = true;
+          } 
+          // B. Department Admins
+          else if (role == 'admin') {
+            if (adminDept == 'All') {
+              shouldNotify = true;
+            } else if (sanitizedTarget != null && adminDept?.toLowerCase() == sanitizedTarget.toLowerCase()) {
+              shouldNotify = true;
+            } else if (sanitizedTarget == null && adminDept == null) {
+              // Global notification, no target, and admin has no specific dept (Generalist)
+              shouldNotify = true;
+            }
+          }
+
+          if (shouldNotify) recipientIds.add(doc.id);
+      }
+
+      // Send to identified recipients
+      for (var uid in recipientIds) {
+        await sendNotification(
+          toUserId: uid,
+          title: title,
+          body: body,
+          type: type,
+          relatedId: relatedId,
+          leaveType: leaveType,
+          academicYearId: academicYearId,
+          targetDepartment: targetDepartment,
+        );
+      }
+    } catch (e) {
+      debugPrint("NotifyAdmins Error: $e");
+    }
+  }
+
   // 🔔 UI Notification Stream (For real-time floating alerts)
   final _uiController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get uiNotificationStream => _uiController.stream;
@@ -226,6 +286,7 @@ class NotificationService {
     String? relatedId, // e.g., leaveId
     String? leaveType, // e.g., CL, VL, OD
     String? academicYearId,
+    String? targetDepartment, // ✅ Added for filtering
   }) async {
     try {
       // 1. Save to Firestore (Real-time DB)
@@ -237,6 +298,7 @@ class NotificationService {
         'relatedId': relatedId,
         'leaveType': leaveType,
         'academicYearId': academicYearId,
+        'targetDepartment': targetDepartment, // ✅ Added for filtering
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -251,6 +313,7 @@ class NotificationService {
           'relatedId': relatedId ?? '',
           'leaveType': leaveType ?? '',
           'academicYearId': academicYearId ?? '',
+          'targetDepartment': targetDepartment ?? '', // ✅ Push data
         },
       );
     } catch (e) {
@@ -349,5 +412,20 @@ class NotificationService {
     } catch (e) {
       debugPrint("Error marking all as read: $e");
     }
+  }
+  
+  Future<void> sendLeaveStatusNotification({
+    required String userId,
+    required String status,
+    required String leaveType,
+    required DateTime fromDate,
+  }) async {
+    final dateStr = DateFormat('MMM dd, yyyy').format(fromDate);
+    await sendNotification(
+      toUserId: userId,
+      title: 'Leave $status',
+      body: 'Your $leaveType request for $dateStr has been $status.',
+      type: 'status_change',
+    );
   }
 }

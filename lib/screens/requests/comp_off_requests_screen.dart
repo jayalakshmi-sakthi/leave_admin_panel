@@ -39,13 +39,24 @@ class _CompOffRequestsScreenState extends State<CompOffRequestsScreen> with Sing
 
   @override
   Widget build(BuildContext context) {
+    Stream<QuerySnapshot> getStream() {
+      Query q;
+      if (widget.adminDepartment == 'All') {
+        q = FirebaseFirestore.instance.collectionGroup('records');
+      } else {
+        q = FirebaseFirestore.instance
+            .collection('compOffRequests')
+            .doc((widget.adminDepartment != null && widget.adminDepartment != 'All' && widget.adminDepartment != 'General') ? widget.adminDepartment : 'CSE')
+            .collection('records');
+      }
+      if (widget.selectedYear != 'All') {
+        q = q.where('academicYearId', isEqualTo: widget.selectedYear);
+      }
+      return q.snapshots();
+    }
+
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('compOffRequests')
-          .doc((widget.adminDepartment != null && widget.adminDepartment != 'All' && widget.adminDepartment != 'General') ? widget.adminDepartment : 'CSE')
-          .collection('records')
-          .where('academicYearId', isEqualTo: widget.selectedYear == 'All' ? null : widget.selectedYear)
-          .snapshots(),
+      stream: getStream(),
       builder: (context, snapshot) {
         final docs = snapshot.data?.docs ?? [];
         var allRequests = docs.map((d) => d.data() as Map<String, dynamic>).toList();
@@ -53,6 +64,15 @@ class _CompOffRequestsScreenState extends State<CompOffRequestsScreen> with Sing
         // Add ID to each record for child components
         for (var i = 0; i < docs.length; i++) {
           allRequests[i]['id'] = docs[i].id;
+        }
+
+        // Filter for Comp-Off requests if using collectionGroup
+        if (widget.adminDepartment == 'All') {
+          allRequests = allRequests.where((r) => 
+            r.containsKey('workedDate') || 
+            r['leaveType'] == 'COMP' || 
+            r['leaveType'] == 'Comp-Off Earn'
+          ).toList();
         }
 
         // Department filter is now handled by the Firestore query string above
@@ -105,34 +125,84 @@ class _CompOffRequestsScreenState extends State<CompOffRequestsScreen> with Sing
     int approved = requests.where((r) => r['status'] == 'Approved').length;
     int rejected = requests.where((r) => r['status'] == 'Rejected').length;
 
-    return Row(
-      children: [
-        Expanded(child: _statCard(total, "Total Grants", Icons.stars_rounded, AdminHelpers.primaryColor)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard(pending, "Pending", Icons.hourglass_empty_rounded, const Color(0xFFF59E0B))),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard(approved, "Approved", Icons.verified_rounded, AdminHelpers.success)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard(rejected, "Rejected", Icons.block_flipped, const Color(0xFFEF4444))),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Dynamic Spacing based on width
+        final double spacing = constraints.maxWidth < 600 ? 12 : 24;
+        
+        if (constraints.maxWidth < 700) {
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              _statCard(total, "Total Grants", Icons.stars_rounded, AdminHelpers.primaryColor, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger, width: (constraints.maxWidth - spacing - 2) / 2),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: _statCard(total, "Total Grants", Icons.stars_rounded, AdminHelpers.primaryColor)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger)),
+          ],
+        );
+      }
     );
   }
 
-  Widget _statCard(int value, String label, IconData icon, Color color) {
+  Widget _statCard(int value, String label, IconData icon, Color color, {double? width}) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: width,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        color: isDark ? AdminHelpers.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AdminHelpers.darkBorder : color.withOpacity(0.12), width: 1.5),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 12),
-          Text(value.toString(), style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-          Text(label.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color.withOpacity(0.7))),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.1), 
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withOpacity(0.2), width: 1),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            value.toString(), 
+            style: TextStyle(
+              fontSize: 32, 
+              fontWeight: FontWeight.w900, 
+              letterSpacing: -1.0, 
+              color: isDark ? Colors.white : AdminHelpers.textMain
+            )
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label.toUpperCase(), 
+            style: TextStyle(
+              fontSize: 11, 
+              fontWeight: FontWeight.bold, 
+              color: isDark ? Colors.grey[400] : AdminHelpers.textMuted, 
+              letterSpacing: 0.8
+            )
+          ),
         ],
       ),
     );
@@ -165,19 +235,252 @@ class _CompOffList extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(24),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        final data = filtered[index];
-        return _CompOffCard(docId: data['id'], data: data);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return ListView.separated(
+            padding: const EdgeInsets.all(24),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filtered.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
+            itemBuilder: (context, index) {
+              final data = filtered[index];
+              return _CompOffCard(docId: data['id'], data: data);
+            },
+          );
+        }
+
+        // Desktop Table View
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth - 48),
+              child: DataTable(
+                headingRowHeight: 56,
+                dataRowHeight: 72,
+                columnSpacing: (constraints.maxWidth - 580) / 4 > 24 ? (constraints.maxWidth - 580) / 4 : 24,
+                horizontalMargin: 20,
+                headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B), fontSize: 13),
+                columns: const [
+                  DataColumn(label: Text("STAFF NAME")),
+                  DataColumn(label: Text("WORKED DATE")),
+                  DataColumn(label: Text("DAYS EARNED")),
+                  DataColumn(label: Text("STATUS")),
+                  DataColumn(label: Text("ACTIONS")),
+                ],
+                rows: filtered.map((d) {
+                  final status = d['status'] ?? 'Pending';
+                  dynamic wVal = d['workedDate'];
+                  DateTime workedDate;
+                  if (wVal is Timestamp) workedDate = wVal.toDate();
+                  else if (wVal is String) workedDate = DateTime.tryParse(wVal) ?? DateTime.now();
+                  else workedDate = DateTime.now();
+                  
+                  final days = (d['days'] ?? 0.0).toDouble();
+
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(d['userId']).get(),
+                          builder: (context, snap) {
+                            final user = snap.data?.data() as Map<String, dynamic>?;
+                            final name = user?['name'] ?? 'Unknown User';
+                            final empId = user?['employeeId'] ?? 'N/A';
+                            return Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AdminHelpers.getAvatarColor(name).withOpacity(0.12),
+                                  child: Text(name.isNotEmpty ? name[0] : '?', style: TextStyle(color: AdminHelpers.getAvatarColor(name), fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                                    Text(empId, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      DataCell(Text(DateFormat('EEE, MMM dd, yyyy').format(workedDate), style: const TextStyle(fontSize: 13, color: Color(0xFF334155)))),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text("${days.toStringAsFixed(1)} Days", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.orange)),
+                        ),
+                      ),
+                      DataCell(_statusBadge(status)),
+                      DataCell(
+                        Row(
+                          children: [
+                            if (status == 'Pending') ...[
+                              _ActionButton(
+                                label: "Approve",
+                                color: AdminHelpers.primaryColor,
+                                icon: Icons.check_circle_outline,
+                                docId: d['id'],
+                                data: d,
+                                newStatus: 'Approved',
+                              ),
+                              const SizedBox(width: 8),
+                              _ActionButton(
+                                label: "Reject",
+                                color: Colors.red,
+                                icon: Icons.cancel_outlined,
+                                docId: d['id'],
+                                data: d,
+                                newStatus: 'Rejected',
+                              ),
+                            ] else ...[
+                               TextButton.icon(
+                                 onPressed: () {
+                                   Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.adminCompOffDetails,
+                                      arguments: {'docId': d['id'], 'data': d},
+                                    );
+                                 },
+                                 icon: const Icon(Icons.visibility_rounded, size: 16),
+                                 label: const Text("View Details", style: TextStyle(fontSize: 12)),
+                               )
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
       },
     );
   }
+
+  Widget _statusBadge(String status) {
+    Color bg;
+    Color text;
+    switch (status) {
+      case 'Approved': bg = const Color(0xFFDCFCE7); text = const Color(0xFF15803D); break;
+      case 'Rejected': bg = const Color(0xFFFEE2E2); text = const Color(0xFFB91C1C); break;
+      default: bg = const Color(0xFFFEF3C7); text = const Color(0xFFB45309); break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: text)),
+    );
+  }
 }
+
+class _ActionButton extends StatefulWidget {
+  final String label;
+  final Color color;
+  final IconData icon;
+  final String docId;
+  final Map<String, dynamic> data;
+  final String newStatus;
+
+  const _ActionButton({
+    required this.label,
+    required this.color,
+    required this.icon,
+    required this.docId,
+    required this.data,
+    required this.newStatus,
+  });
+
+  @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _loading = false;
+
+  Future<void> _update() async {
+    setState(() => _loading = true);
+    try {
+      final fire = FirebaseFirestore.instance;
+      // 1. Update Request
+      await fire.collection('compOffRequests').doc(widget.docId).update({
+        'status': widget.newStatus,
+        'actionTakenAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. If Approved, Create Grant in User's Subcollection
+      if (widget.newStatus == 'Approved') {
+        final userId = widget.data['userId'];
+        final rawDays = widget.data['days'];
+        final daysToCheck = (rawDays is num) ? rawDays.toDouble() : double.tryParse(rawDays.toString()) ?? 0.0;
+
+        if (daysToCheck > 0 && userId != null) {
+          await fire
+              .collection('users')
+              .doc(userId)
+              .collection('compOffGrants')
+              .add({
+            'userId': userId,
+            'days': daysToCheck,
+            'sourceRequestId': widget.docId,
+            'academicYearId': widget.data['academicYearId'] ?? '2024-2025',
+            'grantedAt': FieldValue.serverTimestamp(),
+            'workedDate': widget.data['workedDate'],
+            'reason': widget.data['description'] ?? 'Approved via Dashboard',
+          });
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request ${widget.newStatus}")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _loading 
+      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+      : InkWell(
+          onTap: _update,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: widget.color.withOpacity(0.5)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, size: 14, color: widget.color),
+                const SizedBox(width: 6),
+                Text(widget.label, style: TextStyle(color: widget.color, fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        );
+  }
+}
+
 
 class _CompOffCard extends StatefulWidget {
   final String docId;
@@ -275,14 +578,7 @@ class _CompOffCardState extends State<_CompOffCard> {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF64748B).withOpacity(0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: InkWell(
@@ -293,7 +589,7 @@ class _CompOffCardState extends State<_CompOffCard> {
             arguments: {'docId': widget.docId, 'data': widget.data},
           );
         },
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         child: Column(
           children: [
             // 1️⃣ HEADER
@@ -390,7 +686,7 @@ class _CompOffCardState extends State<_CompOffCard> {
                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                            decoration: BoxDecoration(
                              color: Colors.orange.withOpacity(0.1),
-                             borderRadius: BorderRadius.circular(8),
+                             borderRadius: BorderRadius.circular(12),
                            ),
                            child: Text(
                              "${days.toStringAsFixed(1)} Days",
@@ -420,7 +716,7 @@ class _CompOffCardState extends State<_CompOffCard> {
                        onPressed: _loading ? null : () => _updateStatus('Approved'),
                        style: ElevatedButton.styleFrom(
                          backgroundColor: AdminHelpers.primaryColor,
-                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                          elevation: 0,
                        ),
@@ -458,7 +754,7 @@ class _CompOffCardState extends State<_CompOffCard> {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
       child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: text)),
     );
   }

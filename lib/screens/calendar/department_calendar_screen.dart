@@ -134,204 +134,191 @@ class _DepartmentCalendarScreenState extends State<DepartmentCalendarScreen> {
           final areAllSelected = selectedEvents.isNotEmpty && 
                                  selectedEvents.every((e) => _selectedRequestIds.contains(e.id));
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1️⃣ CALENDAR PANEL (Left)
-              Expanded(
-                flex: 5,
-                child: Container(
-                  margin: const EdgeInsets.all(24),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      TableCalendar<LeaveRequestModel>(
-                        firstDay: DateTime.utc(2023, 1, 1),
-                        lastDay: DateTime.utc(2030, 12, 31),
-                        focusedDay: _focusedDay,
-                        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                        eventLoader: _getEventsForDay,
-                        calendarFormat: CalendarFormat.month,
-                        startingDayOfWeek: StartingDayOfWeek.monday,
-                        headerStyle: const HeaderStyle(
-                          formatButtonVisible: false,
-                          titleCentered: true,
-                          titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        calendarStyle: CalendarStyle(
-                          todayDecoration: BoxDecoration(
-                            color: AdminHelpers.primaryColor.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          selectedDecoration: const BoxDecoration(
-                            color: AdminHelpers.primaryColor,
-                            shape: BoxShape.circle,
-                          ),
-                          markerDecoration: const BoxDecoration(
-                            color: AdminHelpers.secondaryColor,
-                            shape: BoxShape.circle,
-                          ),
-                          outsideDaysVisible: false,
-                        ),
-                        onDaySelected: (selectedDay, focusedDay) {
-                          setState(() {
-                            _selectedDay = selectedDay;
-                            _focusedDay = focusedDay;
-                            _selectedFilter = "All"; // Reset filter 
-                            _selectedRequestIds.clear(); // Reset selection
-                          });
-                        },
-                        onPageChanged: (focusedDay) {
-                          _focusedDay = focusedDay;
-                        },
-                        calendarBuilders: CalendarBuilders(
-                           markerBuilder: (context, day, events) {
-                             if (events.isEmpty) return const SizedBox.shrink();
-                             return Positioned(
-                               bottom: 1,
-                               child: Container(
-                                 decoration: const BoxDecoration(
-                                   color: AdminHelpers.secondaryColor,
-                                   shape: BoxShape.circle,
-                                 ),
-                                 width: 6, height: 6,
-                               ),
-                             );
-                           },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Legend
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _legendItem(AdminHelpers.secondaryColor, "Present / Leaves"),
-                          const SizedBox(width: 16),
-                          _legendItem(AdminHelpers.primaryColor, "Selected"),
-                        ],
-                      )
-                    ],
-                  ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isMobile = constraints.maxWidth < 900;
+              
+              Widget calendarPanel = Container(
+                margin: EdgeInsets.all(isMobile ? 12 : 24),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: isDark ? AdminHelpers.darkSurface : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? AdminHelpers.darkBorder : const Color(0xFFE2E8F0)),
                 ),
-              ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TableCalendar<LeaveRequestModel>(
+                      firstDay: DateTime.utc(2023, 1, 1),
+                      lastDay: DateTime.utc(2030, 12, 31),
+                      focusedDay: _focusedDay,
+                      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                      eventLoader: _getEventsForDay,
+                      calendarFormat: CalendarFormat.month,
+                      startingDayOfWeek: StartingDayOfWeek.monday,
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AdminHelpers.textMain),
+                      ),
+                      calendarStyle: CalendarStyle(
+                        defaultTextStyle: TextStyle(color: isDark ? Colors.white : AdminHelpers.textMain),
+                        weekendTextStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.red[400]),
+                        todayDecoration: BoxDecoration(
+                          color: AdminHelpers.primaryColor.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        selectedDecoration: const BoxDecoration(
+                          color: AdminHelpers.primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        markerDecoration: const BoxDecoration(
+                          color: AdminHelpers.secondaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        outsideDaysVisible: false,
+                      ),
+                      onDaySelected: (selectedDay, focusedDay) {
+                        setState(() {
+                          _selectedDay = selectedDay;
+                          _focusedDay = focusedDay;
+                          _selectedFilter = "All"; // Reset filter 
+                          _selectedRequestIds.clear(); // Reset selection
+                        });
+                      },
+                      onPageChanged: (focusedDay) {
+                        _focusedDay = focusedDay;
+                      },
+                      calendarBuilders: CalendarBuilders(
+                        markerBuilder: (context, day, events) {
+                          if (events.isEmpty) return const SizedBox.shrink();
+                          return Positioned(
+                            bottom: 1,
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: AdminHelpers.secondaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              width: 6, height: 6,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _legendItem(AdminHelpers.secondaryColor, "Present / Leaves", isDark),
+                        const SizedBox(width: 16),
+                        _legendItem(AdminHelpers.primaryColor, "Selected", isDark),
+                      ],
+                    )
+                  ],
+                ),
+              );
 
-              // 2️⃣ DETAILS PANEL (Right)
-              Expanded(
-                flex: 3,
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(0, 24, 24, 24),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor, 
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header Row
-                      Text(
-                        _selectedDay != null 
-                        ? DateFormat('MMMM dd, yyyy').format(_selectedDay!)
-                        : "Select a Date",
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: theme.textTheme.titleLarge?.color),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "${selectedEvents.length} Leaves • ${_selectedFilter == 'All' ? 'All Types' : AdminHelpers.getLeaveName(_selectedFilter)}",
-                        style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Filter & Download
-                      Row(
-                         children: [
-                           // Filter Dropdown
-                           Expanded(
-                             child: Container(
-                               padding: const EdgeInsets.symmetric(horizontal: 12),
-                               decoration: BoxDecoration(
-                                 color: theme.cardColor,
-                                 borderRadius: BorderRadius.circular(12),
-                                 border: Border.all(color: theme.dividerColor),
-                               ),
-                               child: DropdownButtonHideUnderline(
-                                 child: DropdownButton<String>(
-                                   value: availableTypes.contains(_selectedFilter) ? _selectedFilter : "All",
-                                   isExpanded: true,
-                                   icon: const Icon(Icons.filter_list_rounded, size: 20),
-                                   items: availableTypes.map((type) {
-                                     return DropdownMenuItem(
-                                       value: type,
-                                       child: Text(
-                                         type == "All" ? "All Types" : AdminHelpers.getLeaveName(type),
-                                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                                       ),
-                                     );
-                                   }).toList(),
-                                   onChanged: (val) {
-                                     if (val != null) setState(() {
-                                       _selectedFilter = val;
-                                       _selectedRequestIds.clear(); // Reset selection on filter change
-                                     });
-                                   },
-                                 ),
+              Widget detailsPanel = Container(
+                margin: EdgeInsets.fromLTRB(isMobile ? 12 : 0, isMobile ? 12 : 24, isMobile ? 12 : 24, 24),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: isDark ? AdminHelpers.darkSurface : Colors.white, 
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? AdminHelpers.darkBorder : const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: isMobile ? MainAxisSize.min : MainAxisSize.max,
+                  children: [
+                    Text(
+                      _selectedDay != null 
+                      ? DateFormat('MMMM dd, yyyy').format(_selectedDay!)
+                      : "Select a Date",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AdminHelpers.textMain),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "${selectedEvents.length} Leaves • ${_selectedFilter == 'All' ? 'All Types' : AdminHelpers.getLeaveName(_selectedFilter)}",
+                      style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                       children: [
+                         Expanded(
+                           child: Container(
+                             padding: const EdgeInsets.symmetric(horizontal: 12),
+                             decoration: BoxDecoration(
+                               color: theme.cardColor,
+                               borderRadius: BorderRadius.circular(12),
+                               border: Border.all(color: theme.dividerColor),
+                             ),
+                             child: DropdownButtonHideUnderline(
+                               child: DropdownButton<String>(
+                                 value: availableTypes.contains(_selectedFilter) ? _selectedFilter : "All",
+                                 isExpanded: true,
+                                 icon: const Icon(Icons.filter_list_rounded, size: 20),
+                                 items: availableTypes.map((type) {
+                                   return DropdownMenuItem(
+                                     value: type,
+                                     child: Text(
+                                       type == "All" ? "All Types" : AdminHelpers.getLeaveName(type),
+                                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                     ),
+                                   );
+                                 }).toList(),
+                                 onChanged: (val) {
+                                   if (val != null) setState(() {
+                                     _selectedFilter = val;
+                                     _selectedRequestIds.clear(); // Reset selection on filter change
+                                   });
+                                 },
                                ),
                              ),
                            ),
-                           const SizedBox(width: 12),
-                           
-                           // Batch Download Button
-                           InkWell(
-                             onTap: _selectedRequestIds.isEmpty ? null : () async {
-                                final batch = selectedEvents.where((e) => _selectedRequestIds.contains(e.id)).toList();
-                                await _pdfService.generateBatchApplications(batch);
-                             },
-                             borderRadius: BorderRadius.circular(12),
-                             child: Container(
-                               padding: const EdgeInsets.all(12),
-                               decoration: BoxDecoration(
-                                 color: _selectedRequestIds.isEmpty ? Colors.grey[300] : AdminHelpers.primaryColor,
-                                 borderRadius: BorderRadius.circular(12),
-                               ),
-                               child: const Icon(Icons.download_rounded, color: Colors.white),
+                         ),
+                         const SizedBox(width: 12),
+                         InkWell(
+                           onTap: _selectedRequestIds.isEmpty ? null : () async {
+                              final batch = selectedEvents.where((e) => _selectedRequestIds.contains(e.id)).toList();
+                              await _pdfService.generateBatchApplications(batch);
+                           },
+                           borderRadius: BorderRadius.circular(12),
+                           child: Container(
+                             padding: const EdgeInsets.all(12),
+                             decoration: BoxDecoration(
+                               color: _selectedRequestIds.isEmpty ? Colors.grey[300] : AdminHelpers.primaryColor,
+                               borderRadius: BorderRadius.circular(12),
                              ),
-                           )
-                         ],
-                      ),
-
-                      // Select All Checkbox
-                      if (selectedEvents.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16, bottom: 8),
-                          child: InkWell(
-                            onTap: () => _toggleSelectAll(selectedEvents),
-                            child: Row(
-                              children: [
-                                Checkbox(
-                                  value: areAllSelected,
-                                  onChanged: (val) => _toggleSelectAll(selectedEvents),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                ),
-                                const Text("Select All", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                const Spacer(),
-                                if (_selectedRequestIds.isNotEmpty)
-                                  Text("${_selectedRequestIds.length} Selected", style: const TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.primaryColor, fontSize: 13)),
-                              ],
-                            ),
+                             child: const Icon(Icons.download_rounded, color: Colors.white),
+                           ),
+                         )
+                       ],
+                    ),
+                    if (selectedEvents.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16, bottom: 8),
+                        child: InkWell(
+                          onTap: () => _toggleSelectAll(selectedEvents),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: areAllSelected,
+                                onChanged: (val) => _toggleSelectAll(selectedEvents),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              const Text("Select All", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              const Spacer(),
+                              if (_selectedRequestIds.isNotEmpty)
+                                Text("${_selectedRequestIds.length} Selected", style: const TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.primaryColor, fontSize: 13)),
+                            ],
                           ),
                         ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // List
+                      ),
+                    const SizedBox(height: 8),
+                    if (isMobile) 
+                       ...selectedEvents.map((req) => _buildRequestItem(req, theme, _selectedRequestIds.contains(req.id))).toList()
+                    else
                       Expanded(
                         child: selectedEvents.isEmpty
                         ? Center(
@@ -350,85 +337,84 @@ class _DepartmentCalendarScreenState extends State<DepartmentCalendarScreen> {
                         : ListView.separated(
                             itemCount: selectedEvents.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final req = selectedEvents[index];
-                              final isSelected = _selectedRequestIds.contains(req.id);
-
-                              return InkWell(
-                                onTap: () => _toggleSelection(req.id),
-                                borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: theme.cardColor,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))
-                                    ],
-                                    border: isSelected ? Border.all(color: AdminHelpers.primaryColor, width: 2) : Border.all(color: Colors.transparent),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Checkbox(
-                                        value: isSelected,
-                                        onChanged: (val) => _toggleSelection(req.id),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                      ),
-                                      CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
-                                        child: Text(
-                                          req.userName.isNotEmpty ? req.userName[0] : '?',
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AdminHelpers.getAvatarColor(req.userName)),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(req.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                            const SizedBox(height: 4),
-                                            Container(
-                                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                               decoration: BoxDecoration(
-                                                 color: AdminHelpers.getLeaveColor(req.leaveType).withOpacity(0.1),
-                                                 borderRadius: BorderRadius.circular(4),
-                                               ),
-                                               child: Text(
-                                                 AdminHelpers.getLeaveName(req.leaveType),
-                                                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AdminHelpers.getLeaveColor(req.leaveType)),
-                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      IconButton(
-                                        onPressed: () async {
-                                            await _pdfService.generateApplicationPdf(req);
-                                        },
-                                        icon: const Icon(Icons.visibility_rounded, size: 20, color: Colors.grey),
-                                        tooltip: "View Application PDF",
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
+                            itemBuilder: (context, index) => _buildRequestItem(selectedEvents[index], theme, _selectedRequestIds.contains(selectedEvents[index].id)),
                           ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-              ),
-            ],
+              );
+
+              if (isMobile) {
+                return ListView(
+                  children: [
+                    calendarPanel,
+                    detailsPanel,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: calendarPanel),
+                  Expanded(flex: 3, child: detailsPanel),
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
 
-  Widget _legendItem(Color color, String label) {
+  Widget _buildRequestItem(LeaveRequestModel req, ThemeData theme, bool isSelected) {
+    return InkWell(
+      onTap: () => _toggleSelection(req.id),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? AdminHelpers.primaryColor.withOpacity(0.05) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? AdminHelpers.primaryColor.withOpacity(0.2) : theme.dividerColor.withOpacity(0.5)),
+        ),
+        child: Row(
+          children: [
+            Checkbox(
+              value: isSelected,
+              onChanged: (_) => _toggleSelection(req.id),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)), // Minor aesthetic tweak
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(req.userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(
+                    "${AdminHelpers.getLeaveName(req.leaveType)} • ${req.numberOfDays} Days",
+                    style: TextStyle(fontSize: 12, color: theme.disabledColor),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AdminHelpers.getStatusColor(req.status).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                req.status,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AdminHelpers.getStatusColor(req.status)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _legendItem(Color color, String label, bool isDark) {
     return Row(
       children: [
         Container(
@@ -436,7 +422,7 @@ class _DepartmentCalendarScreenState extends State<DepartmentCalendarScreen> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[300] : AdminHelpers.textMain)),
       ],
     );
   }

@@ -128,7 +128,7 @@ class _NotificationOverlayState extends State<_NotificationOverlay> with SingleT
             color: Colors.transparent,
             child: InkWell(
               onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 380),
                 padding: const EdgeInsets.all(16),
@@ -136,16 +136,16 @@ class _NotificationOverlayState extends State<_NotificationOverlay> with SingleT
                   color: isDark 
                       ? const Color(0xFF1E293B).withOpacity(0.9) 
                       : Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1), // ✅ Corrected from black10
                     width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),

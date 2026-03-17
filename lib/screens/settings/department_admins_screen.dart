@@ -219,7 +219,97 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // 🖊️ SHOW ADD DIALOG
+  // 🖊️ EDIT ADMIN
+  // ---------------------------------------------------------------------------
+  Future<void> _editAdmin(String uid, String username, String department) async {
+    setState(() => _loading = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'username': username,
+        'department': department,
+        'name': '$department Admin',
+        'employeeId': 'ADMIN-$department',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        Navigator.pop(context); // Close Dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Admin Updated Successfully"), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      _showError("Update Error: $e");
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showEditDialog(String uid, String currentUsername, String currentDept) {
+    final usernameCtrl = TextEditingController(text: currentUsername);
+    String selectedDept = currentDept;
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Edit Department Admin"),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Update the details for this department admin.", style: TextStyle(color: AdminHelpers.textMuted, fontSize: 13)),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: usernameCtrl,
+                    decoration: AdminHelpers.inputDecoration(label: "Username", hint: "e.g. placement_admin"),
+                    validator: (v) => v!.isEmpty ? "Required" : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: AdminHelpers.departments.contains(selectedDept) ? selectedDept : AdminHelpers.departments.firstWhere((d) => d != 'All'),
+                    decoration: AdminHelpers.inputDecoration(label: "Department", hint: "Select Department"),
+                    items: AdminHelpers.departments
+                        .where((d) => d != 'All')
+                        .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => selectedDept = v!),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: AdminHelpers.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  _editAdmin(uid, usernameCtrl.text.trim(), selectedDept);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdminHelpers.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text("Save Changes"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // ➕ SHOW ADD DIALOG
   // ---------------------------------------------------------------------------
   void _showAddDialog() {
     final usernameCtrl = TextEditingController();
@@ -242,38 +332,39 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Username
+                  const Text("Create a new login for a department-level administrator.", style: TextStyle(color: AdminHelpers.textMuted, fontSize: 13)),
+                  const SizedBox(height: 20),
                   TextFormField(
                     controller: usernameCtrl,
-                    decoration: const InputDecoration(labelText: "Username", hintText: "e.g. placement_admin"),
+                    decoration: AdminHelpers.inputDecoration(label: "Username", hint: "e.g. cse_admin", icon: Icons.person_outline),
                     validator: (v) => v!.isEmpty ? "Required" : null,
                   ),
-                  const SizedBox(height: 12),
-                  // Email
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: emailCtrl,
-                    decoration: const InputDecoration(labelText: "Recovery Email", hintText: "e.g. cse@college.edu"),
+                    decoration: AdminHelpers.inputDecoration(label: "Recovery Email", hint: "e.g. cse@college.edu", icon: Icons.email_outlined),
                     validator: (v) => !v!.contains('@') ? "Invalid Email" : null,
                   ),
-                  const SizedBox(height: 12),
-                  // Password
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: passwordCtrl,
                     obscureText: obscure,
-                    decoration: InputDecoration(
-                      labelText: "Password",
+                    decoration: AdminHelpers.inputDecoration(
+                      label: "Password", 
+                      hint: "Min 6 characters", 
+                      icon: Icons.lock_outline
+                    ).copyWith(
                       suffixIcon: IconButton(
-                        icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                        icon: Icon(obscure ? Icons.visibility : Icons.visibility_off, color: AdminHelpers.textMuted, size: 20),
                         onPressed: () => setDialogState(() => obscure = !obscure),
                       ),
                     ),
                     validator: (v) => v!.length < 6 ? "Min 6 chars" : null,
                   ),
-                  const SizedBox(height: 12),
-                  // Department Dropdown
+                  const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: selectedDept,
-                    decoration: const InputDecoration(labelText: "Department"),
+                    decoration: AdminHelpers.inputDecoration(label: "Department", hint: "Select Department", icon: Icons.business_outlined),
                     items: AdminHelpers.departments
                         .where((d) => d != 'All')
                         .map((d) => DropdownMenuItem(value: d, child: Text(d)))
@@ -287,7 +378,7 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
+              child: const Text("Cancel", style: TextStyle(color: AdminHelpers.textMuted)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -301,8 +392,9 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).brightness == Brightness.dark ? AdminHelpers.secondaryColor : AdminHelpers.primaryColor,
+                backgroundColor: AdminHelpers.primaryColor,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text("Create Admin"),
             ),
@@ -316,18 +408,21 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
   Widget build(BuildContext context) {
     return ResponsiveContainer(
       child: Scaffold(
+        backgroundColor: AdminHelpers.scaffoldBg,
         appBar: AppBar(
-          title: const Text("Department Admins"),
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          title: const Text("Department Admins", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF1E293B),
           elevation: 0,
           leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: Theme.of(context).iconTheme.color),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
             onPressed: () => Navigator.pop(context),
+            tooltip: "Back",
           ),
-          titleTextStyle: TextStyle(
-            color: Theme.of(context).textTheme.titleLarge?.color,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+          centerTitle: true,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(color: AdminHelpers.border, height: 1),
           ),
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -364,37 +459,87 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
                   }
 
                   return ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(24),
                     itemCount: docs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       final data = docs[index].data() as Map<String, dynamic>;
                       final uid = docs[index].id;
-                      final dept = data['department'] ?? 'Unknown';
+                      final dept = (data['department'] as String?)?.trim() ?? 'Unknown';
                       final username = data['username'] ?? '—';
-                      final email = data['email'] ?? '—'; // Auth email (e.g. user@leavex.admin)
-                      final recoveryEmail = data['recoveryEmail'] ?? email; // Real email
+                      final recoveryEmail = data['recoveryEmail'] ?? data['email'] ?? '—';
+                      final Color deptColor = AdminHelpers.getDeptColor(dept);
 
-                      return Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Theme.of(context).dividerColor),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: AdminHelpers.getDeptColor(dept).withOpacity(0.1),
-                            child: Text(
-                              dept.substring(0, 1),
-                              style: TextStyle(color: AdminHelpers.getDeptColor(dept), fontWeight: FontWeight.bold),
+                      return Container(
+                        decoration: AdminHelpers.cardDecoration(context),
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            // 🎨 Avatar
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: deptColor.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                dept.isNotEmpty ? dept[0].toUpperCase() : '?',
+                                style: TextStyle(color: deptColor, fontWeight: FontWeight.bold, fontSize: 18),
+                              ),
                             ),
-                          ),
-                          title: Text("$dept Admin ($username)", style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(recoveryEmail),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _deleteAdmin(uid, email),
-                          ),
+                            const SizedBox(width: 16),
+                            // 📄 Details
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        "$dept Admin",
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AdminHelpers.textMain),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AdminHelpers.scaffoldBg,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          username,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AdminHelpers.primaryColor),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    recoveryEmail,
+                                    style: const TextStyle(color: AdminHelpers.textMuted, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // ⚡ Actions
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, color: AdminHelpers.primaryColor, size: 22),
+                                  onPressed: () => _showEditDialog(uid, username, dept),
+                                  tooltip: "Edit Admin",
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 22),
+                                  onPressed: () => _deleteAdmin(uid, data['email'] ?? ''),
+                                  tooltip: "Remove Admin",
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       );
                     },

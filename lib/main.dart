@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Performance
 import 'utils/theme_controller.dart';
+import 'package:flutter/foundation.dart';
 
 import 'firebase_options.dart';
 import 'routes/app_routes.dart';
@@ -10,15 +12,33 @@ import 'services/notification_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 🛡️ Bulletproof Splash Removal Fallback
+  if (kIsWeb) {
+    Timer(const Duration(seconds: 4), () {
+      debugPrint("🛡️ [DART] Admin Emergency Splash Removal (Stubbed)");
+      // Note: dart:html cannot be imported safely in a cross-platform app
+      // We use index.html/CSS for primary splash management.
+    });
+  }
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // ⚡ Enable Firestore offline cache (10 MB) — faster repeat opens
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-  );
+  // ⚡ Enable Firestore offline cache safely (Persistence is default on some platforms)
+  if (!kIsWeb) {
+    try {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      debugPrint("✅ [DART] Admin Firestore Persistence Enabled");
+    } catch (e) {
+      debugPrint("⚠️ [DART] Admin Firestore Persistence Failed: $e");
+    }
+  } else {
+    debugPrint("ℹ️ [DART] Admin Firestore Web: Using default persistence (IndexedDB)");
+  }
 
   // 🔔 Init notifications in background — don’t block app launch
   Future.microtask(() => NotificationService().init());
@@ -45,23 +65,23 @@ class LeaveAdminApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7C3AED), // Violet 600 (Matches User App)
-          primary: const Color(0xFF7C3AED),
-          secondary: const Color(0xFF6366F1), // Indigo 500
+          seedColor: const Color(0xFF001C3D), // KEC Navy
+          primary: const Color(0xFF001C3D),
+          secondary: const Color(0xFF003366),
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC), // Slate 50
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC), 
         appBarTheme: const AppBarTheme(
           elevation: 0,
           centerTitle: false,
-          backgroundColor: Colors.white, // Cleaner look
-          foregroundColor: Color(0xFF1E293B), // Dark Slate Text
-          iconTheme: IconThemeData(color: Color(0xFF64748B)),
+          backgroundColor: Color(0xFF001C3D), // Navy AppBar
+          foregroundColor: Colors.white,
+          iconTheme: IconThemeData(color: Colors.white),
         ),
         cardTheme: CardTheme(
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16), // Premium Radius
+            borderRadius: BorderRadius.circular(12), // Premium Radius
             side: const BorderSide(color: Color(0xFFE2E8F0), width: 1), // Slate 200
           ),
           color: Colors.white,

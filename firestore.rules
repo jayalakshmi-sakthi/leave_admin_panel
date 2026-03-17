@@ -18,23 +18,26 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    /// Admin = role is 'admin' or 'super_admin'
-    function isAdmin() {
-      return isAuthenticated() && hasUserDoc() &&
-             myUserDoc().role in ['admin', 'super_admin'];
-    }
-
     /// Super Admin only
     function isSuperAdmin() {
-      return isAuthenticated() && hasUserDoc() &&
-             myUserDoc().role == 'super_admin';
+      return isAuthenticated() && 
+             (request.auth.token.email == 'leave752@gmail.com' ||
+              (hasUserDoc() && (myUserDoc().role == 'super_admin' || myUserDoc().role == 'SUPER_ADMIN')));
+    }
+
+    /// Admin = role is 'admin' or 'super_admin'
+    function isAdmin() {
+      return isSuperAdmin() || 
+             (isAuthenticated() && hasUserDoc() &&
+              (myUserDoc().role == 'admin' || myUserDoc().role == 'ADMIN'));
     }
 
     /// Admin can only access their own department
     function isAdminOfDept(dept) {
-      return isAuthenticated() && hasUserDoc() &&
-             myUserDoc().role in ['admin', 'super_admin'] &&
-             (myUserDoc().department == dept || myUserDoc().role == 'super_admin');
+      return isSuperAdmin() || 
+             (isAuthenticated() && hasUserDoc() &&
+              (myUserDoc().role == 'admin' || myUserDoc().role == 'ADMIN') &&
+              (myUserDoc().department == dept || myUserDoc().department == 'All'));
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -43,6 +46,11 @@ service cloud.firestore {
     // Staff can read/write their own document.
     // ─────────────────────────────────────────────────────────────
     match /users/{userId} {
+      // 🔓 PUBLIC LOGIN LOOKUP
+      // Allow searching for a user record by username while unauthenticated.
+      // This enables Strategy 3 in our login logic (Username -> Email mapping).
+      allow list: if request.auth == null && request.query.limit == 1;
+
       // Staff: own document
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
@@ -108,20 +116,24 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────
     // 🏢 DEPARTMENTS — All dept-specific settings live here
     // Path: departments/{dept}/...
-    // Only the admin of that dept can read/write.
+    // Admins can write; ALL authenticated users can READ
+    // (staff need leave types & academic year for the apply form)
     // ─────────────────────────────────────────────────────────────
     match /departments/{dept} {
-      allow read, write: if isAdminOfDept(dept);
+      // ✅ All authenticated users can read the dept document
+      // (leaveTypes, currentAcademicYear, etc. are stored here)
+      allow read: if isAuthenticated();
+      allow write: if isAdminOfDept(dept);
 
-      // Academic Years scoped to dept
+      // Academic Years scoped to dept — staff need to read!
       match /academicYears/{yearId} {
-        allow read: if isAdminOfDept(dept);
+        allow read: if isAuthenticated();
         allow write: if isAdminOfDept(dept);
       }
 
-      // Settings (leave_types, academic_year, etc.)
+      // Settings (leave_types, academic_year, etc.) — staff need to read!
       match /settings/{docId} {
-        allow read: if isAdminOfDept(dept);
+        allow read: if isAuthenticated();
         allow write: if isAdminOfDept(dept);
       }
 
@@ -130,6 +142,7 @@ service cloud.firestore {
         allow read: if isAdminOfDept(dept) ||
                        (isAuthenticated() && hasUserDoc() && resource.data.userId == request.auth.uid);
         allow write: if isAdminOfDept(dept);
+        allow create: if isAdminOfDept(dept);
       }
     }
 
@@ -189,11 +202,21 @@ service cloud.firestore {
     match /{path=**}/records/{requestId} {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid ||
-                      (hasUserDoc() && resource.data.department == myUserDoc().department));
+                      (hasUserDoc() && resource.data.department == myUserDoc().department) ||
+                      isSuperAdmin());
       allow update: if isAuthenticated() &&
                        (resource.data.userId == request.auth.uid ||
                         (hasUserDoc() && resource.data.department == myUserDoc().department &&
-                         myUserDoc().role in ['admin', 'super_admin']));
+                         myUserDoc().role in ['admin', 'super_admin']) ||
+                        isSuperAdmin());
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🌐 COLLECTION GROUP: compOffGrants (for staff to see earned comp-offs)
+    // ─────────────────────────────────────────────────────────────
+    match /{path=**}/compOffGrants/{grantId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }

@@ -118,13 +118,15 @@ class AppRoutes {
       // ---------- SETTINGS ----------
       case settings:
         return MaterialPageRoute(
-          builder: (_) => const SettingsScreen(),
+          builder: (_) => const SettingsScreen(adminDepartment: 'All'),
         );
 
       // ---------- USER MANAGEMENT ----------
       case pendingUsers:
+        final args = routeSettings.arguments;
+        String? dept = (args is Map) ? args['departmentFilter'] : null;
         return MaterialPageRoute(
-          builder: (_) => const PendingUsersScreen(),
+          builder: (_) => PendingUsersScreen(departmentFilter: dept),
         );
 
       case academicYears:
@@ -133,8 +135,10 @@ class AppRoutes {
         );
 
       case notifications:
+        final args = routeSettings.arguments;
+        String? dept = (args is Map) ? args['departmentFilter'] : (args is String ? args : null);
         return MaterialPageRoute(
-          builder: (_) => const AdminNotificationsScreen(),
+          builder: (_) => AdminNotificationsScreen(departmentFilter: dept),
         );
 
       case adminCompOffDetails:

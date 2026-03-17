@@ -8,12 +8,14 @@ class DarkSidebar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
   final bool isDesktop;
+  final String? profilePicUrl; // ✅ Added
 
   const DarkSidebar({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
     required this.isDesktop,
+    this.profilePicUrl, // ✅ Added
   });
 
   @override
@@ -23,13 +25,6 @@ class DarkSidebar extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: AdminHelpers.border)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 20,
-            offset: const Offset(4, 0),
-          )
-        ],
       ),
       child: Column(
         children: [
@@ -38,7 +33,7 @@ class DarkSidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: Row(
               children: [
-                Image.asset('assets/logo.png', width: 32, height: 32),
+                const Icon(Icons.shield_rounded, color: AdminHelpers.primaryColor, size: 32), // Using Icon as fallback if asset missing
                 const SizedBox(width: 12),
                 const Text(
                   "LeaveX",
@@ -132,54 +127,95 @@ class DarkSidebar extends StatelessWidget {
 
   Widget _buildUserProfile() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AdminHelpers.border)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey[100]!)),
       ),
       child: StreamBuilder<UserModel>(
         stream: FirestoreService().getUserStream(FirebaseAuth.instance.currentUser?.uid ?? ''),
         builder: (context, snapshot) {
           final user = snapshot.data;
           final name = user?.name ?? "Admin User";
-          final email = user?.email ?? "";
-          
-          return Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AdminHelpers.primaryColor.withOpacity(0.1),
-                backgroundImage: user?.profilePicUrl != null ? NetworkImage(user!.profilePicUrl!) : null,
-                child: user?.profilePicUrl == null 
-                  ? const Icon(Icons.person, color: AdminHelpers.primaryColor, size: 18) 
-                  : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          final isSuperAdmin = user?.role == 'super_admin';
+          final department = isSuperAdmin ? "Super Admin" : (user?.department ?? "General");
+          final finalProfilePic = profilePicUrl ?? user?.profilePicUrl;
+          final hasPic = finalProfilePic != null && finalProfilePic.isNotEmpty;
+
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      name,
-                      style: const TextStyle(color: AdminHelpers.textMain, fontWeight: FontWeight.bold, fontSize: 13),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AdminHelpers.primaryColor.withOpacity(0.1), width: 2),
+                      ),
+                      child: CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.white,
+                        backgroundImage: hasPic ? NetworkImage(finalProfilePic) : null,
+                        child: !hasPic ? const Icon(Icons.person_rounded, size: 20, color: AdminHelpers.primaryColor) : null,
+                      ),
                     ),
-                    Text(
-                      email,
-                      style: const TextStyle(color: AdminHelpers.textMuted, fontSize: 11),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            department,
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSuperAdmin ? AdminHelpers.success : AdminHelpers.getDeptColor(department)),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, color: AdminHelpers.textMuted, size: 20),
-                onPressed: () => FirebaseAuth.instance.signOut(),
-                tooltip: "Logout",
-              )
-            ],
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => onItemSelected(-1),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.withOpacity(0.1)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.logout_rounded, size: 14, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Sign Out",
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         }
       ),
     );
   }
 }
+

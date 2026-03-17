@@ -17,7 +17,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   bool _showPassword = false;
 
   // 🎨 Theme Colors (Soulful Palette - Matched with User App)
-  static const Color primaryBlue = Color(0xFF7C3AED); // Violet 600
+  static const Color primaryBlue = Color(0xFF001C3D); // Navy
   static const Color darkSlate = Color(0xFF1E293B);   // Slate 800 (Softer)
   static const Color softText = Color(0xFF64748B);    // Slate 500
   static const Color cardBg = Colors.white;
@@ -184,7 +184,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: const Text(
             "Reset Password",
             style: TextStyle(fontWeight: FontWeight.bold, color: darkSlate),
@@ -330,14 +330,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
               color: cardBg,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: darkSlate.withOpacity(0.08),
-                  blurRadius: 40,
-                  offset: const Offset(0, 20),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -457,7 +451,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             filled: true,
             fillColor: scaffoldBg,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
           ),
@@ -474,7 +468,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryBlue,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
           child: _loading

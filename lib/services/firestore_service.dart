@@ -28,7 +28,8 @@ class FirestoreService {
       final doc = await _db.collection('users').doc(adminUid).get();
       if (doc.exists) {
         _cachedAdminUid = adminUid;
-        _cachedAdminDept = (doc.data()?['department'] as String?)?.trim();
+        final data = doc.data() as Map<String, dynamic>?;
+        _cachedAdminDept = (data?['department'] as String?)?.trim();
         return _cachedAdminDept;
       }
     } catch (e) {
@@ -46,20 +47,22 @@ class FirestoreService {
   }
 
   // ──────────────────────────────────────────────────────────
-  // 👥 EMPLOYEES (Department-scoped, limited)
+  // 👥 EMPLOYEES (Department-scoped)
   // ──────────────────────────────────────────────────────────
 
   Stream<List<UserModel>> getEmployeesStream({required String department}) {
-    return _db
-        .collection('users')
-        .where('role', isEqualTo: 'staff')
-        .where('department', isEqualTo: department)
-        .limit(200) // Prevent full-scan reads
+    Query query = _db.collection('users').where('role', isEqualTo: 'staff');
+    if (department != 'All') {
+      query = query.where('department', isEqualTo: department);
+    }
+    return query
+        .limit(200)
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) {
               try {
-                return UserModel.fromMap(doc.data(), doc.id);
+                final data = doc.data() as Map<String, dynamic>;
+                return UserModel.fromMap(data, doc.id);
               } catch (e) {
                 debugLog('Error parsing user ${doc.id}: $e');
                 return null;
@@ -72,7 +75,8 @@ class FirestoreService {
   Stream<UserModel> getUserStream(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((doc) {
       if (!doc.exists) throw Exception('User not found');
-      return UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      final data = doc.data() as Map<String, dynamic>;
+      return UserModel.fromMap(data, doc.id);
     });
   }
 
@@ -94,7 +98,7 @@ class FirestoreService {
   }
 
   // ──────────────────────────────────────────────────────────
-  // 📝 LEAVE REQUESTS (Department-scoped, limited)
+  // 📝 LEAVE REQUESTS (Department-scoped)
   // ──────────────────────────────────────────────────────────
 
   Stream<List<LeaveRequestModel>> getLeaveRequestsStream({
@@ -102,11 +106,16 @@ class FirestoreService {
     String? statusFilter,
     String? academicYearId,
   }) {
-    Query query = _db
-        .collection('leaveRequests')
-        .doc(department)
-        .collection('records')
-        .limit(100); // Limit to 100 most recent after in-memory sort
+    Query query;
+    if (department == 'All') {
+      query = _db.collectionGroup('records').limit(200);
+    } else {
+      query = _db
+          .collection('leaveRequests')
+          .doc(department)
+          .collection('records')
+          .limit(100);
+    }
 
     if (academicYearId != null && academicYearId != 'All') {
       query = query.where('academicYearId', isEqualTo: academicYearId);
@@ -196,17 +205,9 @@ class FirestoreService {
     }
   }
 
-  // ──────────────────────────────────────────────────────────
-  // 🔀 COMP-OFF REQUESTS
-  // ──────────────────────────────────────────────────────────
-
   Future<void> updateCompOffStatus(
-    String requestId,
-    String status,
-    String adminId, {
-    required String department,
-    required Map<String, dynamic> data,
-  }) async {
+      String requestId, String status, String adminId,
+      {required String department, required Map<String, dynamic> data}) async {
     final docRef = _db
         .collection('compOffRequests')
         .doc(department)
@@ -220,32 +221,33 @@ class FirestoreService {
     });
 
     if (status == 'Approved') {
-      final userId = data['userId'];
-      final rawDays = data['days'];
-      final daysToCheck = rawDays is num
-          ? rawDays.toDouble()
-          : double.tryParse(rawDays.toString()) ?? 0.0;
+      try {
+        final userId = data['userId'];
+        final days = data['days'] as num;
+        final academicYearId = data['academicYearId'];
+        final description = data['description'];
 
-      if (daysToCheck > 0) {
         await _db
             .collection('departments')
             .doc(department)
             .collection('compOffGrants')
             .add({
           'userId': userId,
-          'days': daysToCheck,
+          'days': days.toDouble(),
+          'academicYearId': academicYearId,
+          'reason': 'Approved Comp-Off Earn: $description',
           'sourceRequestId': requestId,
-          'academicYearId': data['academicYearId'] ?? getCurrentAcademicYearString(),
           'grantedAt': FieldValue.serverTimestamp(),
-          'workedDate': data['workedDate'],
-          'reason': data['description'] ?? 'Approved Request',
+          'grantedBy': adminId,
         });
+      } catch (e) {
+        debugLog('Failed to grant comp-off: $e');
       }
     }
   }
 
   // ──────────────────────────────────────────────────────────
-  // ⚙️ SETTINGS (Cached to avoid repeat reads)
+  // ⚙️ SETTINGS & CONFIG
   // ──────────────────────────────────────────────────────────
 
   String getCurrentAcademicYearString() {
@@ -254,224 +256,117 @@ class FirestoreService {
     return '$startYear-${startYear + 1}';
   }
 
-  Future<Map<String, dynamic>> getAcademicYearSettings(
-      {required String department}) async {
-    final cacheKey = 'aySettings_$department';
-    if (_settingsCache.containsKey(cacheKey)) {
-      return _settingsCache[cacheKey]!;
-    }
-    try {
-      final doc = await _db
-          .collection('departments')
-          .doc(department)
-          .collection('settings')
-          .doc('academic_year')
-          .get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        if ((data['label'] as String?)?.isNotEmpty == true) {
-          _settingsCache[cacheKey] = data;
-          return data;
-        }
-      }
-    } catch (e) {
-      debugLog('getAcademicYearSettings error: $e');
-    }
-    final defaultData = {'label': getCurrentAcademicYearString()};
-    _settingsCache[cacheKey] = defaultData;
-    return defaultData;
-  }
-
-  Future<void> setAcademicYearSettings(
-      {required String department, required Map<String, dynamic> data}) async {
-    _settingsCache.remove('aySettings_$department'); // Invalidate cache
-    await _db
-        .collection('departments')
-        .doc(department)
-        .collection('settings')
-        .doc('academic_year')
-        .set(data, SetOptions(merge: true));
-  }
-
-  Future<List<Map<String, dynamic>>> getLeaveTypes(
-      {required String department}) async {
-    if (_leaveTypesCache.containsKey(department)) {
-      return _leaveTypesCache[department]!;
-    }
-    try {
-      final doc = await _db
-          .collection('departments')
-          .doc(department)
-          .collection('settings')
-          .doc('leave_types')
-          .get();
-      if (doc.exists) {
-        final List<dynamic> types = doc.data()?['types'] ?? [];
-        final result = types.cast<Map<String, dynamic>>();
-        _leaveTypesCache[department] = result;
-        return result;
-      }
-    } catch (e) {
-      debugLog('getLeaveTypes error: $e');
-    }
-    const defaults = [
-      {'name': 'CL', 'days': 12},
-      {'name': 'VL', 'days': 6},
-      {'name': 'OD', 'days': 10},
-    ];
-    _leaveTypesCache[department] = defaults;
-    return defaults;
-  }
-
-  Future<void> setLeaveTypes(
-      {required String department,
-      required List<Map<String, dynamic>> types}) async {
-    _leaveTypesCache.remove(department); // Invalidate cache
-    await _db
-        .collection('departments')
-        .doc(department)
-        .collection('settings')
-        .doc('leave_types')
-        .set({'types': types}, SetOptions(merge: true));
-  }
-
-  // ──────────────────────────────────────────────────────────
-  // 📅 ACADEMIC YEARS (Cached)
-  // ──────────────────────────────────────────────────────────
-
   Future<List<String>> getAcademicYears({required String department}) async {
-    if (_academicYearsCache.containsKey(department)) {
-      return _academicYearsCache[department]!;
-    }
-    try {
-      final snapshot = await _db
-          .collection('departments')
-          .doc(department)
-          .collection('academicYears')
-          .orderBy('id', descending: true)
-          .limit(10)
-          .get();
-      if (snapshot.docs.isNotEmpty) {
-        final years = snapshot.docs.map((doc) => doc.id).toList();
-        _academicYearsCache[department] = years;
-        return years;
-      }
-    } catch (e) {
-      debugLog('getAcademicYears error: $e');
+    final doc = await _db.collection('departments').doc(department).get();
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>;
+      final years = (data['academicYears'] as List<dynamic>?)?.cast<String>() ?? [];
+      if (years.isNotEmpty) return years;
     }
     return [getCurrentAcademicYearString()];
   }
 
-  // ──────────────────────────────────────────────────────────
-  // 📊 COMP-OFF STATS
-  // ──────────────────────────────────────────────────────────
-
-  Future<Map<String, double>> getCompOffStats(
-      String userId, String academicYear, String department) async {
-    double safeParse(dynamic v) {
-      if (v is num) return v.toDouble();
-      if (v is String) return double.tryParse(v) ?? 0.0;
-      return 0.0;
+  Future<Map<String, dynamic>> getAcademicYearSettings({required String department}) async {
+    final doc = await _db.collection('departments').doc(department).get();
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>;
+      return {
+        'label': data['currentAcademicYear'] ?? getCurrentAcademicYearString(),
+        'start': data['academicYearStart'],
+        'end': data['academicYearEnd'],
+      };
     }
+    return {'label': getCurrentAcademicYearString()};
+  }
 
-    // Run both reads in parallel
-    final results = await Future.wait([
-      _db
-          .collection('departments')
-          .doc(department)
-          .collection('compOffGrants')
-          .where('userId', isEqualTo: userId)
-          .where('academicYearId', isEqualTo: academicYear)
-          .limit(50)
-          .get(),
-      _db
-          .collection('leaveRequests')
-          .doc(department)
-          .collection('records')
-          .where('userId', isEqualTo: userId)
-          .where('academicYearId', isEqualTo: academicYear)
-          .limit(50)
-          .get(),
-    ]);
+  Future<void> setAcademicYearSettings(
+      {required String department, required Map<String, dynamic> data}) async {
+    await _db.collection('departments').doc(department).set({
+      'currentAcademicYear': data['label'],
+      'academicYearStart': data['start'],
+      'academicYearEnd': data['end'],
+      'settingsUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
-    double totalGranted = 0.0;
-    for (var d in results[0].docs) {
-      totalGranted += safeParse(d.data()['days']);
+  Future<List<Map<String, dynamic>>> getLeaveTypes({required String department}) async {
+    final doc = await _db.collection('departments').doc(department).get();
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>;
+      final types = (data['leaveTypes'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+      if (types.isNotEmpty) return types;
     }
+    return [
+      {'name': 'CL', 'days': 12},
+      {'name': 'VL', 'days': 6},
+      {'name': 'OD', 'days': 10},
+    ];
+  }
 
-    double totalUsed = 0.0;
-    for (var d in results[1].docs) {
-      final data = d.data();
-      if ((data['leaveType'] == 'COMP' || data['leaveType'] == 'Comp-Off') &&
-          data['status'] != 'Rejected') {
-        totalUsed += safeParse(data['numberOfDays']);
+  Future<void> setLeaveTypes(
+      {required String department, required List<Map<String, dynamic>> types}) async {
+    await _db.collection('departments').doc(department).set({
+      'leaveTypes': types,
+      'settingsUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<Map<String, double>> getCompOffStats(String userId, String academicYear,
+      {required String department}) async {
+    try {
+      final results = await Future.wait([
+        _db.collection('departments').doc(department).collection('compOffGrants').where('userId', isEqualTo: userId).where('academicYearId', isEqualTo: academicYear).get(),
+        _db.collectionGroup('records').where('userId', isEqualTo: userId).where('academicYearId', isEqualTo: academicYear).get()
+      ]);
+
+      double totalGranted = 0.0;
+      for (var d in results[0].docs) {
+        final data = d.data() as Map<String, dynamic>;
+        totalGranted += (data['days'] ?? 0.0) as double;
       }
-    }
 
-    return {'limit': totalGranted, 'used': totalUsed};
+      double totalUsed = 0.0;
+      for (var d in results[1].docs) {
+        final data = d.data() as Map<String, dynamic>;
+        if (data['leaveType'] == 'COMP' && data['status'] != 'Rejected') {
+           totalUsed += (data['numberOfDays'] ?? 0.0) as double;
+        }
+      }
+
+      return {'limit': totalGranted, 'used': totalUsed};
+    } catch (e) {
+      return {'limit': 0.0, 'used': 0.0};
+    }
   }
 
   // ──────────────────────────────────────────────────────────
-  // 🔔 BADGE COUNTS (Department-scoped, limited)
+  // 📊 DASHBOARD COUNTS
   // ──────────────────────────────────────────────────────────
 
-  Stream<int> getPendingLeaveCountStream(
-      {required String department, String? academicYearId}) {
-    Query query = _db
-        .collection('leaveRequests')
-        .doc(department)
-        .collection('records')
-        .where('status', isEqualTo: 'Pending')
-        .limit(50);
-
-    if (academicYearId != null && academicYearId != 'All') {
-      query = query.where('academicYearId', isEqualTo: academicYearId);
+  Stream<int> getPendingLeaveCount({required String department}) {
+    if (department == 'All') {
+      return _db.collectionGroup('records').where('status', isEqualTo: 'Pending').snapshots().map((snap) => snap.docs.length);
     }
-
-    return query.snapshots().map((snapshot) => snapshot.docs
-        .where((doc) =>
-            (doc.data() as Map<String, dynamic>)['leaveType'] != 'OD')
-        .length);
+    return _db.collection('leaveRequests').doc(department).collection('records').where('status', isEqualTo: 'Pending').snapshots().map((snap) => snap.docs.length);
   }
 
-  Stream<int> getPendingODCountStream(
-      {required String department, String? academicYearId}) {
-    Query query = _db
-        .collection('leaveRequests')
-        .doc(department)
-        .collection('records')
-        .where('status', isEqualTo: 'Pending')
-        .where('leaveType', isEqualTo: 'OD')
-        .limit(50);
-
-    if (academicYearId != null && academicYearId != 'All') {
-      query = query.where('academicYearId', isEqualTo: academicYearId);
+  Stream<int> getPendingCompOffCount({required String department}) {
+    if (department == 'All') {
+       return _db.collectionGroup('records').where('leaveType', isEqualTo: 'Comp-Off Earn').where('status', isEqualTo: 'Pending').snapshots().map((snap) => snap.docs.length);
     }
-
-    return query.snapshots().map((snapshot) => snapshot.docs.length);
+    return _db.collection('leaveRequests').doc(department).collection('records').where('leaveType', isEqualTo: 'Comp-Off Earn').where('status', isEqualTo: 'Pending').snapshots().map((snap) => snap.docs.length);
   }
 
-  Stream<int> getPendingCompOffCountStream(
-      {required String department, String? academicYearId}) {
-    Query query = _db
-        .collection('compOffRequests')
-        .doc(department)
-        .collection('records')
-        .where('status', isEqualTo: 'Pending')
-        .limit(50);
-
-    if (academicYearId != null && academicYearId != 'All') {
-      query = query.where('academicYearId', isEqualTo: academicYearId);
+  Stream<int> getPendingOnDutyCount({required String department}) {
+    if (department == 'All') {
+       return _db.collectionGroup('records').where('leaveType', isEqualTo: 'OD').where('status', isEqualTo: 'Pending').snapshots().map((snap) => snap.docs.length);
     }
-
-    return query.snapshots().map((snapshot) => snapshot.docs.length);
+    return _db.collection('leaveRequests').doc(department).collection('records').where('leaveType', isEqualTo: 'OD').where('status', isEqualTo: 'Pending').snapshots().map((snap) => snap.docs.length);
   }
 
-  // ──────────────────────────────────────────────────────────
-  // 🛠 INTERNAL
-  // ──────────────────────────────────────────────────────────
-  void debugLog(String msg) {
-    // ignore: avoid_print
-    print('[FirestoreService] $msg');
+  Stream<int> getPendingUserCount() {
+    return _db.collection('users').where('approved', isEqualTo: false).where('role', isEqualTo: 'staff').snapshots().map((snap) => snap.docs.length);
   }
+
+  void debugLog(String msg) => print('🔥 FirestoreService: $msg');
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Added
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import '../../models/leave_request_model.dart';
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
@@ -22,10 +22,9 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   bool _loading = false;
   late LeaveRequestModel _request;
-  bool _initializing = true; // For initial fetch
+  bool _initializing = true; 
   late String _currentStatus;
   
-  // User Data State
   String _userName = "Loading...";
   String _employeeId = "";
 
@@ -40,27 +39,22 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
     } else if (widget.requestId != null) {
         _fetchRequest(widget.requestId!);
     } else {
-        // Error state
         _initializing = false;
     }
   }
 
   Future<void> _fetchRequest(String id) async {
       try {
-          // Fetch from active year first or try to find it
-          // Ideally we need yearId. If not passed, we search?
-          // For now, let's search in likely places or assume active year.
-          // BETTER: Pass collection/yearId in arguments.
-          // Fallback: search common collections.
-          final doc = await FirebaseFirestore.instance.collection('leaveRequests').doc(id).get();
-          if (!doc.exists) {
-              // Try previous year? Or just fail.
-              // Fail for now.
-          }
+          final snap = await FirebaseFirestore.instance
+              .collectionGroup('records')
+              .where('id', isEqualTo: id)
+              .limit(1)
+              .get();
           
-          if (doc.exists) {
+          if (snap.docs.isNotEmpty) {
+              final doc = snap.docs.first;
               setState(() {
-                  _request = LeaveRequestModel.fromMap(doc.data()!, doc.id);
+                  _request = LeaveRequestModel.fromMap(doc.data(), doc.id);
                   _currentStatus = _request.status;
                   _initializing = false;
               });
@@ -75,11 +69,9 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
   }
 
   Future<void> _initializeData() async {
-    // 1. Use existing data if available
     _userName = _request.userName;
     _employeeId = _request.employeeId ?? "N/A";
 
-    // 2. If data is missing (legacy records), fetch from User Profile
     if (_userName == 'Unknown' || _userName.isEmpty || _employeeId == 'N/A') {
       try {
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(_request.userId).get();
@@ -96,7 +88,6 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
         debugPrint("Error fetching user details: $e");
       }
     } else {
-        // Ensure UI updates if it was stuck on initial state
         if(mounted) setState(() {}); 
     }
   }
@@ -104,7 +95,6 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
   Future<void> _updateStatus(String status) async {
     setState(() => _loading = true);
     try {
-      // Passing department ensures we hit the correct isolated nested collection
       await _firestoreService.updateLeaveStatus(
         _request.id, 
         status, 
@@ -116,7 +106,6 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
         _currentStatus = status;
       });
 
-      // ✅ Send Notification to User
       try {
         await NotificationService().sendNotification(
           toUserId: _request.userId,
@@ -135,7 +124,7 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Request marked as $status")),
         );
-        Navigator.pop(context); // Go back to list after action
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -154,27 +143,22 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
         );
     }
     
-    // Check if request loaded
-    // We used 'late' so if _initializing is false and _request not set, it might crash if we accessed it.
-    // But we set it in _fetch or via widget.
-    // Safety check:
     try {
-        // Access a property to ensure initialized
-        final s = _request.status;
+        final _ = _request.status;
     } catch (e) {
         return const Scaffold(body: Center(child: Text("Request not found.")));
     }
 
-    // 🎨 Theme & Colors
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 600;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Slate 50
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text("Application Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1E293B), // Slate 800
+        foregroundColor: const Color(0xFF1E293B),
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -188,7 +172,7 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
       ),
       body: ResponsiveContainer(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isMobile ? 16 : 24),
           child: Column(
               children: [
             // 🏷️ Status Badge
@@ -197,7 +181,7 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: AdminHelpers.getStatusColor(_currentStatus).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AdminHelpers.getStatusColor(_currentStatus).withOpacity(0.2)),
               ),
               child: Row(
@@ -225,33 +209,24 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
             // 📄 Application Form "Paper"
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(40),
+              padding: EdgeInsets.all(isMobile ? 24 : 40),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF64748B).withOpacity(0.08), // Softer shadow
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  )
-                ],
-                border: Border.all(color: const Color(0xFFE2E8F0)), // Subtle border
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header (Date)
                   Align(
                     alignment: Alignment.topRight,
                     child: Text(
-                      "Date: ${_initializing ? '...' : AdminHelpers.formatDate(_request.createdAt)}",
+                      "Date: ${AdminHelpers.formatDate(_request.createdAt)}",
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF64748B)),
                     ),
                   ),
                   const SizedBox(height: 30),
 
-                  // FROM
                   Text("From,", style: TextStyle(fontWeight: FontWeight.bold, color: theme.textTheme.titleMedium?.color)),
                   const SizedBox(height: 4),
                   Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -259,7 +234,6 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                   const Text("KEC", style: TextStyle(color: Color(0xFF64748B))),
                   const SizedBox(height: 24),
 
-                  // TO
                   Text("To,", style: TextStyle(fontWeight: FontWeight.bold, color: theme.textTheme.titleMedium?.color)),
                   const SizedBox(height: 4),
                   const Text("The Admin,", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -267,14 +241,12 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                   const Text("Perundurai.", style: TextStyle(color: Color(0xFF64748B))),
                   const SizedBox(height: 32),
 
-                  // SUBJECT
                   Text(
                     "Subject: Requisition for ${AdminHelpers.getLeaveName(_request.leaveType)} - Reg.",
-                    style: const TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline, fontSize: 15),
+                    style: TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline, fontSize: isMobile ? 14 : 15),
                   ),
                   const SizedBox(height: 24),
 
-                  // BODY
                   const Text("Respected Sir/Madam,", style: TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 12),
                   Text(
@@ -282,7 +254,7 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                     "${AdminHelpers.formatDate(_request.fromDate)} to "
                     "${AdminHelpers.formatDate(_request.toDate)} due to "
                     "${_request.reason}.",
-                    style: const TextStyle(height: 1.8, fontSize: 15, color: Color(0xFF334155)),
+                    style: TextStyle(height: 1.8, fontSize: isMobile ? 14 : 15, color: const Color(0xFF334155)),
                     textAlign: TextAlign.justify,
                   ),
                   const SizedBox(height: 12),
@@ -291,17 +263,17 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: const Color(0xFFF59E0B).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.info_outline_rounded, size: 16, color: Colors.orange),
+                          const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFF59E0B)),
                           const SizedBox(width: 8),
                           Text(
                             "Half Day: ${_request.halfDaySession} Session",
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 13),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF59E0B), fontSize: 13),
                           ),
                         ],
                       ),
@@ -315,20 +287,31 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                   const SizedBox(height: 48),
 
                   // SIGNATURE AREA
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Thanking You,", style: TextStyle(fontWeight: FontWeight.w500)),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Text("Yours Faithfully,", style: TextStyle(fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 48),
-                          Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ],
-                  ),
+                  isMobile 
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Thanking You,", style: TextStyle(fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 32),
+                        const Text("Yours Faithfully,", style: TextStyle(fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 12),
+                        Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Thanking You,", style: TextStyle(fontWeight: FontWeight.w500)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text("Yours Faithfully,", style: TextStyle(fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 48),
+                            Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -342,15 +325,8 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                     BoxShadow(
-                        color: const Color(0xFF64748B).withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                  ]
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,7 +339,7 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
+                    Column(
                       children: [
                         if (_request.signedFormUrl != null && _request.signedFormUrl!.isNotEmpty)
                           _buildAttachmentButton(
@@ -371,7 +347,8 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                             Icons.file_present_rounded, 
                             _request.signedFormUrl!
                           ),
-                        const SizedBox(width: 12),
+                        if (_request.signedFormUrl != null && _request.signedFormUrl!.isNotEmpty && _request.finalSignedFormUrl != null && _request.finalSignedFormUrl!.isNotEmpty)
+                          const SizedBox(height: 12),
                         if (_request.finalSignedFormUrl != null && _request.finalSignedFormUrl!.isNotEmpty)
                           _buildAttachmentButton(
                             "Signed Copy", 
@@ -389,38 +366,73 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
 
             // ⚡ ACTIONS
             if (_currentStatus == 'Pending')
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _loading ? null : () => _updateStatus('Rejected'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        foregroundColor: Colors.red,
-                        side: BorderSide(color: Colors.red.withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              isMobile 
+              ? Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : () => _updateStatus('Approved'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          backgroundColor: AdminHelpers.primaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _loading 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                            : const Text("Approve Request", style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
-                      child: const Text("Reject Request", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : () => _updateStatus('Approved'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        backgroundColor: AdminHelpers.primaryColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _loading ? null : () => _updateStatus('Rejected'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text("Reject Request", style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
-                      child: _loading 
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                          : const Text("Approve Request", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                ],
-              )
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _loading ? null : () => _updateStatus('Rejected'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text("Reject Request", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : () => _updateStatus('Approved'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          backgroundColor: AdminHelpers.primaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _loading 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                            : const Text("Approve Request", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                )
             ],
           ),
         ),
@@ -429,7 +441,8 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
   }
 
   Widget _buildAttachmentButton(String label, IconData icon, String url, {bool isSuccess = false}) {
-    return Expanded(
+    return SizedBox(
+      width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: () async {
           if (await canLaunchUrl(Uri.parse(url))) {
@@ -439,9 +452,11 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
         icon: Icon(icon, size: 18),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: isSuccess ? Colors.green : Colors.blue,
-          side: BorderSide(color: isSuccess ? Colors.green.withOpacity(0.5) : Colors.blue.withOpacity(0.5)),
-          backgroundColor: isSuccess ? Colors.green.withOpacity(0.05) : Colors.blue.withOpacity(0.05),
+          foregroundColor: isSuccess ? AdminHelpers.success : AdminHelpers.secondaryColor,
+          side: BorderSide(color: (isSuccess ? AdminHelpers.success : AdminHelpers.secondaryColor).withOpacity(0.5)),
+          backgroundColor: (isSuccess ? AdminHelpers.success : AdminHelpers.secondaryColor).withOpacity(0.05),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );

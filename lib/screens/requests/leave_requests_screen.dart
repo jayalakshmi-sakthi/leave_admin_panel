@@ -224,7 +224,7 @@ class _RequestsTab extends StatelessWidget {
           height: 200,
           decoration: BoxDecoration(
             color: theme.cardColor,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
@@ -268,19 +268,11 @@ class _LeaveRequestCard extends StatelessWidget {
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: theme.cardColor,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isApproved ? Colors.green.withOpacity(0.3) : theme.dividerColor.withOpacity(0.6), 
                 width: 1 // Keep it subtle
               ),
-              boxShadow: [
-                 if (!isDark)
-                  BoxShadow(
-                    color: const Color(0xFF64748B).withOpacity(0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  )
-              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,7 +329,7 @@ class _LeaveRequestCard extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: theme.dividerColor.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
                                     displayId,
@@ -359,7 +351,7 @@ class _LeaveRequestCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: statusColor.withOpacity(0.2)),
                       ),
                       child: Text(
@@ -394,7 +386,7 @@ class _LeaveRequestCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text("HALF DAY", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
                       ),
@@ -453,7 +445,7 @@ class _LeaveRequestCard extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AdminHelpers.primaryColor,
                           side: BorderSide(color: AdminHelpers.primaryColor.withOpacity(0.3)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
 
@@ -472,7 +464,7 @@ class _LeaveRequestCard extends StatelessWidget {
                           foregroundColor: Colors.teal,
                           side: BorderSide(color: Colors.teal.withOpacity(0.3)),
                           backgroundColor: Colors.teal.withOpacity(0.05),
-                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     
@@ -484,7 +476,7 @@ class _LeaveRequestCard extends StatelessWidget {
                       label: Text("View Details", style: TextStyle(color: theme.textTheme.bodyLarge?.color)),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: theme.dividerColor),
-                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ],
@@ -540,6 +532,7 @@ class _LeaveRequestCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         backgroundColor: theme.cardColor,
         title: Text("Application Form Details", style: TextStyle(color: theme.textTheme.titleLarge?.color)),
         content: SizedBox(

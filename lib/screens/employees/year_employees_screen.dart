@@ -93,15 +93,15 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
                 fillColor: const Color(0xFFF1F5F9),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: primaryColor, width: 1.5),
                 ),
               ),
@@ -115,7 +115,7 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
@@ -188,20 +188,13 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
           },
         );
       },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            )
-          ],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Row(
           children: [
@@ -232,8 +225,7 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
                        Container(
                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                          decoration: BoxDecoration(
-                           color: textMuted.withOpacity(0.1),
-                           borderRadius: BorderRadius.circular(4),
+                           borderRadius: BorderRadius.circular(12),
                          ),
                          child: Text(user.employeeId, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textMuted)),
                        ),
@@ -252,7 +244,7 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                  decoration: BoxDecoration(
                    color: Colors.amber.withOpacity(0.1),
-                   borderRadius: BorderRadius.circular(8),
+                   borderRadius: BorderRadius.circular(12),
                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
                  ),
                  child: const Text("PENDING", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber)),
@@ -285,7 +277,7 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
       itemBuilder: (_, __) => Shimmer.fromColors(
         baseColor: Colors.grey[300]!,
         highlightColor: Colors.grey[100]!,
-        child: Container(height: 80, margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+        child: Container(height: 80, margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
       ),
     );
   }

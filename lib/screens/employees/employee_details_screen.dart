@@ -73,7 +73,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
       final leaves = await _firestoreService.getEmployeeLeaveHistory(user.uid, widget.adminDepartment).first;
       final leaveTypes = await _firestoreService.getLeaveTypes(department: widget.adminDepartment);
       
-      final compOffStats = await _firestoreService.getCompOffStats(user.uid, academicYear, widget.adminDepartment);
+      final compOffStats = await _firestoreService.getCompOffStats(user.uid, academicYear, department: widget.adminDepartment);
       final finalLeaveTypes = List<Map<String, dynamic>>.from(leaveTypes);
       
       bool hasComp = finalLeaveTypes.any((t) => t['name'] == 'COMP' || (t['leaveType'] != null && t['leaveType'] == 'COMP'));
@@ -138,12 +138,12 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
           return Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
             appBar: AppBar(
-              iconTheme: IconThemeData(color: theme.iconTheme.color),
-              backgroundColor: theme.appBarTheme.backgroundColor ?? theme.cardColor,
+              iconTheme: const IconThemeData(color: Colors.white),
+              backgroundColor: const Color(0xFF001C3D), // Explicit KEC Navy
               elevation: 0,
-              title: Text(
+              title: const Text(
                 "Employee Details",
-                style: TextStyle(color: theme.textTheme.titleLarge?.color, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(1),
@@ -243,7 +243,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   user.role.toUpperCase(),
@@ -287,7 +287,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                       const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     else
                       IconButton(
-                        icon: const Icon(Icons.check_rounded, color: Colors.green, size: 22),
+                        icon: const Icon(Icons.check_rounded, color: AdminHelpers.success, size: 22),
                         onPressed: _saveEmployeeId,
                       ),
                     IconButton(
@@ -339,7 +339,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
               ),
               const SizedBox(height: 16),
               ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
                   height: 10,
                   child: Row(
@@ -359,8 +359,9 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
   }
 
   Future<Map<String, int>> _fetchStatusCounts(String userId) async {
+    // Use collectionGroup to get all records for this user across departments (admin view)
     final snapshot = await FirebaseFirestore.instance
-        .collection('leaveRequests')
+        .collectionGroup('records')
         .where('userId', isEqualTo: userId)
         .get();
     
@@ -465,17 +466,21 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
     final settings = await _firestoreService.getAcademicYearSettings(department: widget.adminDepartment);
     final academicYearLabel = widget.academicYearId ?? (settings['label'] ?? _firestoreService.getCurrentAcademicYearString());
 
-    // 1. Fetch Leaves
+    // 1. Fetch Leaves — use dept-scoped path
     final leafSnap = await FirebaseFirestore.instance
         .collection('leaveRequests')
+        .doc(widget.adminDepartment)
+        .collection('records')
         .where('userId', isEqualTo: userId)
         .where('academicYearId', isEqualTo: academicYearLabel)
         .where('status', isEqualTo: 'Approved')
         .get();
 
-    // 2. Fetch Comp Offs
+    // 2. Fetch Comp Offs — use dept-scoped path
     final compSnap = await FirebaseFirestore.instance
         .collection('compOffRequests')
+        .doc(widget.adminDepartment)
+        .collection('records')
         .where('userId', isEqualTo: userId)
         .where('academicYearId', isEqualTo: academicYearLabel)
         .where('status', isEqualTo: 'Approved')
@@ -577,7 +582,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
           (compLimit - compStats['used']!).clamp(0.0, 99.0),
           compStats['used']!,
           compLimit,
-          Colors.purple,
+          const Color(0xFF8B5CF6),
           Icons.stars_rounded,
         ));
 
@@ -628,7 +633,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
     final academicYear = widget.academicYearId ?? (settings['label'] ?? _firestoreService.getCurrentAcademicYearString());
     
     final limits = await _firestoreService.getLeaveTypes(department: widget.adminDepartment);
-    final compStats = await _firestoreService.getCompOffStats(userId, academicYear, widget.adminDepartment);
+    final compStats = await _firestoreService.getCompOffStats(userId, academicYear, department: widget.adminDepartment);
 
     // Apply Overrides to limits
     final effectiveLimits = limits.map((limitMap) {
@@ -649,9 +654,11 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
       });
     }
 
-    // Fetch used counts from leaveRequests
+    // Fetch used counts from leaveRequests — use dept-scoped path
     final snapshot = await FirebaseFirestore.instance
         .collection('leaveRequests')
+        .doc(widget.adminDepartment)
+        .collection('records')
         .where('userId', isEqualTo: userId)
         .where('academicYearId', isEqualTo: academicYear)
         .where('status', isEqualTo: 'Approved')
@@ -774,7 +781,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Custom limits saved successfully"), backgroundColor: Colors.green),
+                    const SnackBar(content: Text("Custom limits saved successfully"), backgroundColor: AdminHelpers.success),
                   );
                 }
               } catch (e) {
@@ -800,11 +807,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
-        boxShadow: [
-          BoxShadow(color: color.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -815,7 +819,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
               Icon(icon, color: color, size: 20),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                 child: Text(
                   "Total: ${total.toInt()}",
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
@@ -887,8 +891,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                  padding: const EdgeInsets.all(32),
                  decoration: BoxDecoration(
                    color: Colors.white,
-                   borderRadius: BorderRadius.circular(20),
-                   border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                   borderRadius: BorderRadius.circular(12),
+                   border: Border.all(color: const Color(0xFFE2E8F0)),
                  ),
                  child: const Column(
                    children: [
@@ -918,8 +922,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
         ),
         child: Column(
           children: [
@@ -946,15 +950,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24), // Increased for premium feel
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center, // Fixed overflow by removing IntrinsicHeight
@@ -966,8 +963,8 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
             decoration: BoxDecoration(
               color: statusColor,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                bottomLeft: Radius.circular(24),
+              topLeft: Radius.circular(12),
+                bottomLeft: Radius.circular(12),
               ),
             ),
           ),
@@ -987,7 +984,7 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
                         child: Text(
                           leave.status.toUpperCase(),
                           style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),

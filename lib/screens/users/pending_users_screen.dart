@@ -6,7 +6,8 @@ import '../../models/user_model.dart';
 import '../../services/notification_service.dart';
 
 class PendingUsersScreen extends StatefulWidget {
-  const PendingUsersScreen({super.key});
+  final String? departmentFilter; // ✅ Added for isolation
+  const PendingUsersScreen({super.key, this.departmentFilter});
 
   @override
   State<PendingUsersScreen> createState() => _PendingUsersScreenState();
@@ -22,9 +23,15 @@ class _PendingUsersScreenState extends State<PendingUsersScreen> {
         .where('approved', isEqualTo: false)
         .where('role', isEqualTo: 'staff') // Only staff need approval
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => UserModel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((snapshot) {
+          final users = snapshot.docs
+            .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+            .toList();
+          
+          if (widget.departmentFilter == null || widget.departmentFilter == 'All') return users;
+          
+          return users.where((u) => u.department.toLowerCase() == widget.departmentFilter!.toLowerCase()).toList();
+        });
   }
 
   Future<void> _approveUser(UserModel user) async {
@@ -87,11 +94,23 @@ class _PendingUsersScreenState extends State<PendingUsersScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('Pending User Approvals', style: TextStyle(color: theme.textTheme.titleLarge?.color, fontWeight: FontWeight.bold)),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Pending Approvals', style: TextStyle(color: theme.textTheme.titleLarge?.color, fontWeight: FontWeight.bold, fontSize: 18)),
+            if (widget.departmentFilter != null && widget.departmentFilter != 'All')
+              Text("Department: ${widget.departmentFilter}", style: const TextStyle(color: AdminHelpers.textMuted, fontSize: 11)),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1E293B),
         elevation: 0,
         centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
+          onPressed: () => Navigator.pop(context),
+          tooltip: "Back",
+        ),
       ),
       body: StreamBuilder<List<UserModel>>(
         stream: _getPendingUsers(),
@@ -116,9 +135,6 @@ class _PendingUsersScreenState extends State<PendingUsersScreen> {
                     decoration: BoxDecoration(
                       color: theme.cardColor,
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
-                      ]
                     ),
                     child: Icon(Icons.check_circle_outline_rounded, size: 64, color: theme.disabledColor),
                   ),
@@ -147,12 +163,8 @@ class _PendingUsersScreenState extends State<PendingUsersScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: theme.dividerColor.withOpacity(0.6)),
-                  boxShadow: [
-                     if (!isDark)
-                      BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 16, offset: const Offset(0, 4))
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -185,7 +197,7 @@ class _PendingUsersScreenState extends State<PendingUsersScreen> {
                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                              decoration: BoxDecoration(
                                color: theme.dividerColor.withOpacity(0.3),
-                               borderRadius: BorderRadius.circular(6)
+                               borderRadius: BorderRadius.circular(12)
                              ),
                              child: Text(
                                user.department == "Placement Cell" 
@@ -227,7 +239,7 @@ class _PendingUsersScreenState extends State<PendingUsersScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         backgroundColor: theme.cardColor, // Ensure theme background
         contentPadding: const EdgeInsets.all(24),
         content: Column(

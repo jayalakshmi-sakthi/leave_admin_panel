@@ -7,34 +7,34 @@ class AdminHelpers {
   // ============================================
 
   // Primary Integrations (Soulful Violet - Matches User App)
-  static const Color primaryColor = Color(0xFF7C3AED);    // Violet 600
-  static const Color secondaryColor = Color(0xFF6366F1);  // Indigo 500
-  static const Color accentColor = Color(0xFF8B5CF6);     // Violet 500 (Highlights)
+  // Primary Integrations (KEC Navy Blue)
+  static const Color primaryColor = Color(0xFF001C3D);    // KEC Navy
+  static const Color secondaryColor = Color(0xFF003366);  // Lighter Navy
+  static const Color accentColor = Color(0xFF001C3D);     // Maintain contrast
   
   // States
-  static const Color success = Color(0xFF10B981); // Emerald 500
+  static const Color success = Color(0xFF00A389); // Teal-ish (from image)
   static const Color warning = Color(0xFFF59E0B); // Amber 500
   static const Color danger = Color(0xFFEF4444);  // Red 500
   static const Color info = Color(0xFF0EA5E9);    // Sky 500
 
-  // Neutrals (Light Mode - Softer)
+  // Neutrals (KEC Slate / White)
   static const Color scaffoldBg = Color(0xFFF8FAFC);  // Slate 50
   static const Color surface = Colors.white;
   static const Color border = Color(0xFFE2E8F0);      // Slate 200
   static const Color textMain = Color(0xFF1E293B);    // Slate 800
   static const Color textMuted = Color(0xFF64748B);   // Slate 500
 
-  // 📊 Dashboard Summary Colors (Vibrant & Peaceful)
-  static const Color summaryPurple = Color(0xFF8B5CF6);
-  static const Color summaryTeal = Color(0xFF10B981);
-  static const Color summaryPink = Color(0xFFEC4899);
-  static const Color summaryBlue = Color(0xFF3B82F6);
+  // 📊 Dashboard Summary Colors (Unified)
+  static const Color summaryPurple = Color(0xFF8B5CF6); // Violet
+  static const Color summaryTeal = Color(0xFF10B981);   // Emerald
+  static const Color summaryIndigo = Color(0xFF4F46E5); // Indigo
+  static const Color summarySky = Color(0xFF0EA5E9);    // Sky
 
   // Departments List (Synced with User App)
   // Departments List (Synced with User App)
   static const List<String> departments = [
     'All', // Special Admin Category
-    'Placement Cell',
     // Engineering
     'CIVIL', 'MECH', 'MTS', 'AUTO', 'CHEM', 'FT',
     'EEE', 'ECE', 'EIE', 'CSE', 'IT', 'CSD', 'AIDS', 'AIML',
@@ -43,7 +43,7 @@ class AdminHelpers {
     // Science
     'B.Sc CSD', 'B.Sc IS', 'B.Sc SS', 'M.Sc SS',
     // Others
-    'Ph.D', 'General'
+    'Ph.D', 'General', 'Placement Cell'
   ];
 
   static Color getDeptColor(String dept) {
@@ -70,6 +70,28 @@ class AdminHelpers {
     return _safePalette[hash % _safePalette.length];
   }
 
+  static IconData getDeptIcon(String dept) {
+    switch (dept.toUpperCase()) {
+      case 'CSE': case 'IT': case 'CSD': case 'AIDS': case 'AIML': 
+      case 'B.SC CSD': case 'B.SC IS': case 'B.SC SS': case 'M.SC SS':
+        return Icons.computer_rounded;
+      case 'ECE': case 'EEE': case 'EIE': 
+        return Icons.memory_rounded;
+      case 'MECH': case 'CIVIL': case 'MTS': case 'AUTO': case 'CHEM': case 'FT':
+        return Icons.settings_suggest_rounded;
+      case 'MBA': case 'MCA': 
+        return Icons.business_rounded;
+      case 'PLACEMENT CELL': 
+        return Icons.work_outline_rounded;
+      case 'PH.D':
+        return Icons.school_rounded;
+      case 'ALL':
+        return Icons.dashboard_rounded;
+      default:
+        return Icons.account_balance_rounded;
+    }
+  }
+
   // Neutrals (Dark Mode)
   static const Color darkScaffold = Color(0xFF0F172A); // Slate 900
   static const Color darkSurface = Color(0xFF1E293B);  // Slate 800
@@ -84,19 +106,48 @@ class AdminHelpers {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return BoxDecoration(
       color: isDark ? darkSurface : surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       border: Border.all(
         color: isDark ? darkBorder : border,
         width: 1,
       ),
-      boxShadow: [
-        if (!isDark)
-          BoxShadow(
-            color: const Color(0xFF64748B).withOpacity(0.06),
-            offset: const Offset(0, 4),
-            blurRadius: 12,
-          )
+      boxShadow: isDark ? [] : [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.03),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        )
       ],
+    );
+  }
+
+  /// Premium Input Decoration
+  static InputDecoration inputDecoration({required String label, required String hint, IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null ? Icon(icon, color: primaryColor, size: 20) : null,
+      labelStyle: const TextStyle(color: textMuted, fontSize: 13, fontWeight: FontWeight.w500),
+      hintStyle: TextStyle(color: textMuted.withOpacity(0.4), fontSize: 13),
+      filled: true,
+      fillColor: scaffoldBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: primaryColor, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: danger, width: 1),
+      ),
     );
   }
 
@@ -152,13 +203,12 @@ class AdminHelpers {
 
   static Color getLeaveColor(String type) {
     final t = type.toUpperCase();
-    if (t == 'CL' || t.contains('CASUAL')) return const Color(0xFF4F46E5); // Indigo
-    if (t == 'VL' || t.contains('VACATION')) return const Color(0xFF10B981); // Emerald
-    if (t == 'COMP' || t.contains('COMP')) return const Color(0xFF8B5CF6); // Violet
-    if (t == 'OD' || t.contains('DUTY')) return const Color(0xFF0EA5E9); // Sky
-    if (t == 'SL' || t.contains('SICK')) return const Color(0xFFEF4444); // Red
-    if (t.contains('FESTIVAL')) return const Color(0xFFEC4899); // Pink
-    return const Color(0xFF64748B); // Slate
+    if (t == 'CL' || t.contains('CASUAL')) return primaryColor; // Primary Navy
+    if (t == 'VL' || t.contains('VACATION')) return secondaryColor; // Lighter Navy
+    if (t == 'COMP' || t.contains('COMP')) return const Color(0xFF1E293B); // Slate 800
+    if (t == 'OD' || t.contains('DUTY')) return const Color(0xFF334155); // Slate 700
+    if (t == 'SL' || t.contains('SICK')) return const Color(0xFFDC2626); // Professional Red
+    return const Color(0xFF64748B); // Slate 500
   }
 
   static String getLeaveName(String type) {
@@ -259,8 +309,6 @@ class AdminHelpers {
   static String sanitizeLabel(String label) {
     if (label.isEmpty) return label;
     return label
-        .replaceAll('(Placement Cell)', '')
-        .replaceAll('Placement Cell', '')
         .replaceAll('()', '')
         .trim();
   }

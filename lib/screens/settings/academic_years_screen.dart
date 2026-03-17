@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../utils/admin_helpers.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/responsive_container.dart';
@@ -16,11 +17,27 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
 
   Future<Map<String, dynamic>> _getAcademicYearsWithStats() async {
     try {
-      final snapshot = await _firestore.collection('leaveRequests').get();
+      // 1. Fetch current user to determine department
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return {'years': [], 'globalStats': {}};
+      
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final isSuper = userDoc.data()?['role'] == 'super_admin';
+      final dept = userDoc.data()?['department'];
+
+      // 2. Query across all records (collectionGroup is much more efficient here)
+      Query query = _firestore.collectionGroup('records');
+      
+      // If not super admin, filter by department
+      if (!isSuper && dept != null) {
+        query = query.where('department', isEqualTo: dept);
+      }
+      
+      final snapshot = await query.get();
       
       final Set<String> uniqueYears = {};
       for (var doc in snapshot.docs) {
-        final data = doc.data();
+        final data = doc.data() as Map<String, dynamic>;
         if (data['academicYearId'] != null) {
           uniqueYears.add(data['academicYearId']);
         }
@@ -32,13 +49,23 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
       int totalRejected = 0;
 
       for (var year in uniqueYears) {
-        final yearRequests = snapshot.docs.where((doc) => 
-          doc.data()['academicYearId'] == year
-        ).toList();
+        final yearRequests = snapshot.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return data['academicYearId'] == year;
+        }).toList();
 
-        final app = yearRequests.where((d) => d.data()['status'] == 'Approved').length;
-        final pen = yearRequests.where((d) => d.data()['status'] == 'Pending').length;
-        final rej = yearRequests.where((d) => d.data()['status'] == 'Rejected').length;
+        final app = yearRequests.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return data['status'] == 'Approved';
+        }).length;
+        final pen = yearRequests.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return data['status'] == 'Pending';
+        }).length;
+        final rej = yearRequests.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return data['status'] == 'Rejected';
+        }).length;
 
         totalApproved += app;
         totalPending += pen;
@@ -83,6 +110,11 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
         foregroundColor: const Color(0xFF1E293B),
         elevation: 0,
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
+          onPressed: () => Navigator.pop(context),
+          tooltip: "Back",
+        ),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _getAcademicYearsWithStats(),
@@ -136,14 +168,8 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AdminHelpers.primaryColor.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          )
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminHelpers.primaryColor.withOpacity(0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +187,7 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
               ),
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.analytics_rounded, color: Colors.white),
               )
             ],
@@ -207,20 +233,13 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          )
-        ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
           onTap: () {
             Navigator.pushNamed(context, AppRoutes.yearEmployees, arguments: year);
           },
@@ -234,7 +253,7 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9), // Slate 100
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.calendar_today_rounded, color: AdminHelpers.primaryColor, size: 20),
                     ),
@@ -267,7 +286,7 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
                         height: 8,
                         width: double.infinity,
                         clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
                         child: Row(
                           children: [
                             if (appWidth > 0) Expanded(flex: (appWidth * 100).toInt(), child: Container(color: const Color(0xFF10B981))),
@@ -320,9 +339,7 @@ class _AcademicYearsScreenState extends State<AcademicYearsScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
-            ]),
+            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
             child: Icon(Icons.calendar_today_outlined, size: 64, color: theme.disabledColor),
           ),
           const SizedBox(height: 24),

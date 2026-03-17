@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/admin_login_screen.dart';
+import 'screens/splash_screen.dart'; // ✅ Added
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -11,23 +12,19 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // If connection is active, check user state
-        if (snapshot.connectionState == ConnectionState.active) {
-          User? user = snapshot.data;
-          
-          if (user == null) {
-            return const AdminLoginScreen();
-          } else {
-            return const AdminDashboardScreen();
-          }
+        // 1. Waiting for connection or initial state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashScreen();
         }
 
-        // Waiting for connection
-        return const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
+        // 2. State is active, check user
+        User? user = snapshot.data;
+        
+        if (user == null) {
+          return const AdminLoginScreen();
+        } else {
+          return const AdminDashboardScreen();
+        }
       },
     );
   }

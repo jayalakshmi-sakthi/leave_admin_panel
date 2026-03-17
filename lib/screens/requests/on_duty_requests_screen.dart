@@ -99,34 +99,84 @@ class _OnDutyRequestsScreenState extends State<OnDutyRequestsScreen> with Single
     int approved = requests.where((r) => r.status == 'Approved').length;
     int rejected = requests.where((r) => r.status == 'Rejected').length;
 
-    return Row(
-      children: [
-        Expanded(child: _statCard(total, "Total OD", Icons.business_center_rounded, AdminHelpers.primaryColor)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard(pending, "Pending", Icons.hourglass_empty_rounded, const Color(0xFFF59E0B))),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard(approved, "Approved", Icons.verified_rounded, AdminHelpers.success)),
-        const SizedBox(width: 16),
-        Expanded(child: _statCard(rejected, "Rejected", Icons.block_flipped, const Color(0xFFEF4444))),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Dynamic Spacing based on width
+        final double spacing = constraints.maxWidth < 600 ? 12 : 24;
+        
+        if (constraints.maxWidth < 700) {
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              _statCard(total, "Total OD", Icons.business_center_rounded, AdminHelpers.primaryColor, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success, width: (constraints.maxWidth - spacing - 2) / 2),
+              _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger, width: (constraints.maxWidth - spacing - 2) / 2),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: _statCard(total, "Total OD", Icons.business_center_rounded, AdminHelpers.primaryColor)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success)),
+             const SizedBox(width: 24),
+            Expanded(child: _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger)),
+          ],
+        );
+      }
     );
   }
 
-  Widget _statCard(int value, String label, IconData icon, Color color) {
+  Widget _statCard(int value, String label, IconData icon, Color color, {double? width}) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: width,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        color: isDark ? AdminHelpers.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AdminHelpers.darkBorder : color.withOpacity(0.12), width: 1.5),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 12),
-          Text(value.toString(), style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-          Text(label.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color.withOpacity(0.7))),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.1), 
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withOpacity(0.2), width: 1),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            value.toString(), 
+            style: TextStyle(
+              fontSize: 32, 
+              fontWeight: FontWeight.w900, 
+              letterSpacing: -1.0, 
+              color: isDark ? Colors.white : AdminHelpers.textMain
+            )
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label.toUpperCase(), 
+            style: TextStyle(
+              fontSize: 11, 
+              fontWeight: FontWeight.bold, 
+              color: isDark ? Colors.grey[400] : AdminHelpers.textMuted, 
+              letterSpacing: 0.8
+            )
+          ),
         ],
       ),
     );
@@ -159,18 +209,215 @@ class _ODList extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(24),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        return _OnDutyCard(request: filtered[index]);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return ListView.separated(
+            padding: const EdgeInsets.all(24),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filtered.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
+            itemBuilder: (context, index) {
+              return _OnDutyCard(request: filtered[index]);
+            },
+          );
+        }
+
+        // Desktop Table View
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth - 48),
+              child: DataTable(
+                headingRowHeight: 56,
+                dataRowHeight: 72,
+                columnSpacing: (constraints.maxWidth - 580) / 5 > 24 ? (constraints.maxWidth - 580) / 5 : 24,
+                horizontalMargin: 20,
+                headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B), fontSize: 13),
+                columns: const [
+                  DataColumn(label: Text("STAFF NAME")),
+                  DataColumn(label: Text("DATE")),
+                  DataColumn(label: Text("DAYS")),
+                  DataColumn(label: Text("REASON")),
+                  DataColumn(label: Text("STATUS")),
+                  DataColumn(label: Text("ACTIONS")),
+                ],
+                rows: filtered.map((r) {
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AdminHelpers.getAvatarColor(r.userName).withOpacity(0.12),
+                              child: Text(r.userName.isNotEmpty ? r.userName[0] : '?', style: TextStyle(color: AdminHelpers.getAvatarColor(r.userName), fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(r.userName.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                                Text(r.employeeId ?? 'N/A', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      DataCell(Text(
+                        r.fromDate == r.toDate 
+                          ? DateFormat('dd MMM yyyy').format(r.fromDate)
+                          : "${DateFormat('dd MMM').format(r.fromDate)} - ${DateFormat('dd MMM yyyy').format(r.toDate)}",
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
+                      )),
+                      DataCell(Text("${r.numberOfDays}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)))),
+                      DataCell(SizedBox(width: 150, child: Text(r.reason, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))))),
+                      DataCell(_statusBadge(r.status)),
+                      DataCell(Row(
+                        children: [
+                          if (r.status == 'Pending') ...[
+                             _ActionButton(
+                              label: "Approve",
+                              color: AdminHelpers.primaryColor,
+                              icon: Icons.check_circle_outline,
+                              request: r,
+                              newStatus: 'Approved',
+                            ),
+                            const SizedBox(width: 8),
+                            _ActionButton(
+                              label: "Reject",
+                              color: Colors.red,
+                              icon: Icons.cancel_outlined,
+                              request: r,
+                              newStatus: 'Rejected',
+                            ),
+                          ] else ...[
+                            TextButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => LeaveRequestDetailScreen(requestId: r.id)),
+                                );
+                              },
+                              icon: const Icon(Icons.visibility_rounded, size: 16),
+                              label: const Text("View Details", style: TextStyle(fontSize: 12)),
+                            )
+                          ],
+                        ],
+                      )),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
       },
     );
   }
+
+  Widget _statusBadge(String status) {
+    Color bg;
+    Color text;
+    switch (status) {
+      case 'Approved': bg = const Color(0xFFDCFCE7); text = const Color(0xFF15803D); break;
+      case 'Rejected': bg = const Color(0xFFFEE2E2); text = const Color(0xFFB91C1C); break;
+      default: bg = const Color(0xFFFEF3C7); text = const Color(0xFFB45309); break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: text)),
+    );
+  }
 }
+
+class _ActionButton extends StatefulWidget {
+  final String label;
+  final Color color;
+  final IconData icon;
+  final LeaveRequestModel request;
+  final String newStatus;
+
+  const _ActionButton({
+    required this.label,
+    required this.color,
+    required this.icon,
+    required this.request,
+    required this.newStatus,
+  });
+
+  @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _loading = false;
+
+  Future<void> _update() async {
+    setState(() => _loading = true);
+    try {
+      final fire = FirestoreService();
+      final auth = FirebaseAuth.instance;
+      
+      await fire.updateLeaveStatus(
+        widget.request.id,
+        widget.newStatus,
+        auth.currentUser?.uid ?? 'admin',
+        department: widget.request.department ?? 'CSE',
+      );
+
+       await NotificationService().sendNotification(
+          toUserId: widget.request.userId,
+          title: 'On-Duty Request ${widget.newStatus}',
+          body: 'Your On-Duty request for ${AdminHelpers.formatDate(widget.request.fromDate)} has been ${widget.newStatus}.',
+          type: 'status_change',
+          relatedId: widget.request.id,
+        );
+        
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request ${widget.newStatus}"), backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _loading 
+      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+      : InkWell(
+          onTap: _update,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: widget.color.withOpacity(0.5)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, size: 14, color: widget.color),
+                const SizedBox(width: 6),
+                Text(widget.label, style: TextStyle(color: widget.color, fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        );
+  }
+}
+
 
 
 class _OnDutyCard extends StatefulWidget {
@@ -226,14 +473,7 @@ class _OnDutyCardState extends State<_OnDutyCard> {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF64748B).withOpacity(0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Column(
@@ -285,12 +525,12 @@ class _OnDutyCardState extends State<_OnDutyCard> {
                              Container(
                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                decoration: BoxDecoration(
-                                 color: Colors.blue.withOpacity(0.08),
-                                 borderRadius: BorderRadius.circular(8),
+                                 color: AdminHelpers.secondaryColor.withOpacity(0.08),
+                                 borderRadius: BorderRadius.circular(12),
                                ),
                                child: const Text(
                                  "On Duty (OD)",
-                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.blue),
+                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AdminHelpers.secondaryColor),
                                ),
                              ),
                            ],
@@ -354,7 +594,7 @@ class _OnDutyCardState extends State<_OnDutyCard> {
                         onPressed: _loading ? null : () => _updateStatus('Approved'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AdminHelpers.primaryColor, 
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           elevation: 0,
                         ),
@@ -391,7 +631,7 @@ class _OnDutyCardState extends State<_OnDutyCard> {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
       child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: text)),
     );
   }

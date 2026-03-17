@@ -140,7 +140,7 @@ class _AdminCompOffDetailScreenState extends State<AdminCompOffDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: statusColor.withOpacity(0.2)),
               ),
               child: Row(
@@ -166,15 +166,8 @@ class _AdminCompOffDetailScreenState extends State<AdminCompOffDetailScreen> {
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: [
-                   BoxShadow(
-                      color: const Color(0xFF64748B).withOpacity(0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    )
-                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,8 +200,8 @@ class _AdminCompOffDetailScreenState extends State<AdminCompOffDetailScreen> {
                         const SizedBox(width: 140, child: Text("Days Credited:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                          decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                          child: Text("${(d['days'] ?? 0.0)} Day(s)", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                          decoration: BoxDecoration(color: const Color(0xFFF59E0B).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                          child: Text("${(d['days'] ?? 0.0)} Day(s)", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF59E0B))),
                         ),
                       ],
                     ),
@@ -235,17 +228,17 @@ class _AdminCompOffDetailScreenState extends State<AdminCompOffDetailScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.04),
+                          color: AdminHelpers.secondaryColor.withOpacity(0.04),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                          border: Border.all(color: AdminHelpers.secondaryColor.withOpacity(0.2)),
                         ),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.file_present_rounded, color: Colors.blue),
+                            Icon(Icons.file_present_rounded, color: AdminHelpers.secondaryColor),
                             SizedBox(width: 12),
                             Text("View Official Proof / Work Evidence", 
-                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                              style: TextStyle(color: AdminHelpers.secondaryColor, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
