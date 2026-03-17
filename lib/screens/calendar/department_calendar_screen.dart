@@ -156,27 +156,20 @@ class _DepartmentCalendarScreenState extends State<DepartmentCalendarScreen> {
                       selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                       eventLoader: _getEventsForDay,
                       calendarFormat: CalendarFormat.month,
-                      startingDayOfWeek: StartingDayOfWeek.monday,
+                      startingDayOfWeek: StartingDayOfWeek.sunday, // Standardized
+                      rowHeight: 52,
                       headerStyle: HeaderStyle(
                         formatButtonVisible: false,
                         titleCentered: true,
-                        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AdminHelpers.textMain),
+                        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AdminHelpers.primaryColor),
+                        leftChevronIcon: Icon(Icons.chevron_left_rounded, color: isDark ? Colors.white70 : AdminHelpers.primaryColor),
+                        rightChevronIcon: Icon(Icons.chevron_right_rounded, color: isDark ? Colors.white70 : AdminHelpers.primaryColor),
                       ),
-                      calendarStyle: CalendarStyle(
-                        defaultTextStyle: TextStyle(color: isDark ? Colors.white : AdminHelpers.textMain),
-                        weekendTextStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.red[400]),
-                        todayDecoration: BoxDecoration(
-                          color: AdminHelpers.primaryColor.withOpacity(0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        selectedDecoration: const BoxDecoration(
-                          color: AdminHelpers.primaryColor,
-                          shape: BoxShape.circle,
-                        ),
-                        markerDecoration: const BoxDecoration(
-                          color: AdminHelpers.secondaryColor,
-                          shape: BoxShape.circle,
-                        ),
+                      daysOfWeekStyle: DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(color: isDark ? Colors.grey[400] : const Color(0xFF64748B), fontWeight: FontWeight.w600, fontSize: 13),
+                        weekendStyle: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      calendarStyle: const CalendarStyle(
                         outsideDaysVisible: false,
                       ),
                       onDaySelected: (selectedDay, focusedDay) {
@@ -191,17 +184,53 @@ class _DepartmentCalendarScreenState extends State<DepartmentCalendarScreen> {
                         _focusedDay = focusedDay;
                       },
                       calendarBuilders: CalendarBuilders(
+                        // Today
+                        todayBuilder: (context, date, _) {
+                          return Container(
+                            margin: const EdgeInsets.all(6),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AdminHelpers.primaryColor.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AdminHelpers.primaryColor.withOpacity(0.2)),
+                            ),
+                            child: Text("${date.day}", style: TextStyle(color: isDark ? Colors.white : AdminHelpers.primaryColor, fontWeight: FontWeight.bold)),
+                          );
+                        },
+                        // Selected
+                        selectedBuilder: (context, date, _) {
+                          return Container(
+                            margin: const EdgeInsets.all(6),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AdminHelpers.primaryColor,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(color: AdminHelpers.primaryColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2)),
+                              ],
+                            ),
+                            child: Text("${date.day}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          );
+                        },
+                        // Markers
                         markerBuilder: (context, day, events) {
                           if (events.isEmpty) return const SizedBox.shrink();
-                          return Positioned(
-                            bottom: 1,
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                color: AdminHelpers.secondaryColor,
-                                shape: BoxShape.circle,
-                              ),
-                              width: 6, height: 6,
-                            ),
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: events.take(3).map((e) {
+                               return Container(
+                                 margin: const EdgeInsets.symmetric(horizontal: 1),
+                                 width: 5, height: 5,
+                                 decoration: const BoxDecoration(color: AdminHelpers.secondaryColor, shape: BoxShape.circle),
+                               );
+                            }).toList(),
+                          );
+                        },
+                        // Default
+                        defaultBuilder: (context, date, _) {
+                          return Container(
+                            alignment: Alignment.center,
+                            child: Text("${date.day}", style: TextStyle(color: isDark ? Colors.white : AdminHelpers.textMain, fontWeight: FontWeight.w500)),
                           );
                         },
                       ),
