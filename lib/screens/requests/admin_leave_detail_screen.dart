@@ -6,6 +6,7 @@ import '../../models/leave_request_model.dart';
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/admin_helpers.dart';
+import '../../models/user_model.dart';
 import '../../widgets/responsive_container.dart';
 
 class LeaveRequestDetailScreen extends StatefulWidget {
@@ -228,9 +229,33 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
                   const SizedBox(height: 30),
 
                   Text("From,", style: TextStyle(fontWeight: FontWeight.bold, color: theme.textTheme.titleMedium?.color)),
-                  const SizedBox(height: 4),
-                  Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text("Employee ID: $_employeeId", style: const TextStyle(color: Color(0xFF64748B))),
+                  const SizedBox(height: 12),
+                  StreamBuilder<UserModel>(
+                    stream: _firestoreService.getUserStream(_request.userId),
+                    builder: (context, snapshot) {
+                      final profilePic = snapshot.data?.profilePicUrl;
+                      return Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: AdminHelpers.getAvatarColor(_userName).withOpacity(0.1),
+                            backgroundImage: profilePic?.isNotEmpty == true ? NetworkImage(profilePic!) : null,
+                            child: profilePic?.isNotEmpty == true ? null : Text(_userName[0].toUpperCase(), style: TextStyle(color: AdminHelpers.getAvatarColor(_userName), fontSize: 14)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                Text("Employee ID: $_employeeId", style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                   const Text("KEC", style: TextStyle(color: Color(0xFF64748B))),
                   const SizedBox(height: 24),
 

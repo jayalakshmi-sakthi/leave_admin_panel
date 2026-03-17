@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'routes/app_routes.dart';
 import 'services/notification_service.dart';
+import 'services/update_service.dart'; // ✅ Added
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,9 @@ Future<void> main() async {
   // 🔔 Init notifications in background — don’t block app launch
   Future.microtask(() => NotificationService().init());
 
+  // 🔄 Update checker (Web only)
+  UpdateService().init();
+
   runApp(const LeaveAdminApp());
 }
 
@@ -58,6 +62,7 @@ class LeaveAdminApp extends StatelessWidget {
       valueListenable: ThemeController(),
       builder: (context, mode, child) {
         return MaterialApp(
+          navigatorKey: AppRoutes.navigatorKey, // ✅ Added
           title: 'LeaveX Admin Panel',
       debugShowCheckedModeBanner: false,
 

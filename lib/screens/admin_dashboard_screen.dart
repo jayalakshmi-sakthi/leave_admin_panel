@@ -805,44 +805,51 @@ class _RequestsList extends StatelessWidget {
                 return DataRow(
                   cells: [
                     DataCell(
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
-                            child: Text(req.userName.isNotEmpty ? req.userName[0] : '?',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(req.userName))),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      StreamBuilder<UserModel>(
+                        stream: firestoreService.getUserStream(req.userId),
+                        builder: (context, snapshot) {
+                          final profilePic = snapshot.data?.profilePicUrl;
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
+                                backgroundImage: profilePic?.isNotEmpty == true ? NetworkImage(profilePic!) : null,
+                                child: profilePic?.isNotEmpty == true ? null : Text(req.userName.isNotEmpty ? req.userName[0] : '?',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(req.userName))),
+                              ),
+                              const SizedBox(width: 12),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(req.userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-                                  if (dept == 'All' && req.department != null) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: BoxDecoration(
-                                        color: AdminHelpers.getDeptColor(req.department!).withOpacity(0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        AdminHelpers.getDeptIcon(req.department!),
-                                        size: 10,
-                                        color: AdminHelpers.getDeptColor(req.department!),
-                                      ),
-                                    ),
-                                  ],
+                                  Row(
+                                    children: [
+                                      Text(req.userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                                      if (dept == 'All' && req.department != null) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: AdminHelpers.getDeptColor(req.department!).withOpacity(0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            AdminHelpers.getDeptIcon(req.department!),
+                                            size: 10,
+                                            color: AdminHelpers.getDeptColor(req.department!),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  Text(req.employeeId ?? 'N/A', style: TextStyle(fontSize: 11, color: subColor)),
                                 ],
                               ),
-                              Text(req.employeeId ?? 'N/A', style: TextStyle(fontSize: 11, color: subColor)),
                             ],
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                     DataCell(
@@ -932,6 +939,7 @@ class _RequestsList extends StatelessWidget {
   }
 
   Widget _buildMobileList(List<LeaveRequestModel> filtered, BuildContext context, bool isDark) {
+    final firestoreService = FirestoreService();
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -951,11 +959,18 @@ class _RequestsList extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
-                      child: Text(req.userName.isNotEmpty ? req.userName[0] : '?',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(req.userName))),
+                    StreamBuilder<UserModel>(
+                      stream: firestoreService.getUserStream(req.userId),
+                      builder: (context, snapshot) {
+                        final profilePic = snapshot.data?.profilePicUrl;
+                        return CircleAvatar(
+                          radius: 20,
+                          backgroundColor: AdminHelpers.getAvatarColor(req.userName).withOpacity(0.1),
+                          backgroundImage: profilePic?.isNotEmpty == true ? NetworkImage(profilePic!) : null,
+                          child: profilePic?.isNotEmpty == true ? null : Text(req.userName.isNotEmpty ? req.userName[0] : '?',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: AdminHelpers.getAvatarColor(req.userName))),
+                        );
+                      },
                     ),
                     const SizedBox(width: 12),
                     Expanded(

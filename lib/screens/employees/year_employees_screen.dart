@@ -201,14 +201,17 @@ class _YearEmployeesScreenState extends State<YearEmployeesScreen> {
             CircleAvatar(
               radius: 24,
               backgroundColor: user.approved ? AdminHelpers.getAvatarColor(user.name).withOpacity(0.12) : Colors.orange.withOpacity(0.12),
-              child: Text(
-                user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: user.approved ? AdminHelpers.getAvatarColor(user.name) : Colors.orange,
-                ),
-              ),
+              backgroundImage: user.profilePicUrl?.isNotEmpty == true ? NetworkImage(user.profilePicUrl!) : null,
+              child: user.profilePicUrl?.isNotEmpty == true 
+                ? null 
+                : Text(
+                    user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: user.approved ? AdminHelpers.getAvatarColor(user.name) : Colors.orange,
+                    ),
+                  ),
             ),
             const SizedBox(width: 16),
             Expanded(

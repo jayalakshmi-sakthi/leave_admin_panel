@@ -48,104 +48,79 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     setState(() => _loading = true);
 
     try {
-      UserCredential? cred;
-      FirebaseAuthException? shadowAuthError;
+      String? emailToTry;
       
-      // 🔄 STRATEGY 1: Try as 'Shadow Admin' (username@leavex.admin)
-      if (!input.contains('@')) {
+      // 1. Determine Strategy
+      if (input.contains('@')) {
+        emailToTry = input;
+      } else {
+        // 🔍 Strategy: Username Lookup in Firestore
         try {
-          cred = await _auth.signInWithEmailAndPassword(
-            email: "$input@leavex.admin", 
-            password: password,
-          );
-          
-          // 🛑 ZOMBIE CHECK: Does this Shadow Admin actually exist in DB?
-          final zombieCheck = await _fire.collection('users').doc(cred.user!.uid).get();
-          if (!zombieCheck.exists) {
-            debugPrint("👻 Zombie Account Detected (Auth exists, DB missing). Ignoring.");
-            await _auth.signOut();
-            cred = null; // Discard credential, try other strategies
-          } else {
-            debugPrint("✅ Logged in as Shadow Admin: $input");
-          }
-        } on FirebaseAuthException catch (e) {
-           shadowAuthError = e; // Save error for later
+           final snap = await _fire.collection('users')
+               .where('username', isEqualTo: input)
+               .limit(1)
+               .get();
+               
+           if (snap.docs.isNotEmpty) {
+             emailToTry = snap.docs.first.data()['email'];
+             debugPrint("🎯 Found mapped email: $emailToTry");
+           }
+        } catch (e) {
+           debugPrint("⚠️ Firestore lookup skipped/failed: $e");
+           // If it's a network error here, Firestore usually throws/times out
+        }
+        
+        // 👤 Fallback: Shadow Admin
+        if (emailToTry == null) {
+          emailToTry = "$input@leavex.admin";
         }
       }
 
-      // 🔄 STRATEGY 2: Try as Direct Email (Legacy/Super Admin)
-      if (cred == null && input.contains('@')) {
-        try {
-          cred = await _auth.signInWithEmailAndPassword(
-            email: input,
-            password: password,
-          );
-        } catch (e) {
-             // Fallthrough
-        }
-      }
-      
-      // 🔄 STRATEGY 3: Firestore Lookup (For Super Admin/Legacy who use Username -> Real Email)
-      if (cred == null && !input.contains('@')) {
-        try {
-          final snap = await _fire.collection('users').where('username', isEqualTo: input).limit(1).get();
-          if (snap.docs.isNotEmpty) {
-             final realEmail = snap.docs.first.data()['email'];
-             debugPrint("🔍 Found Real Email for '$input': $realEmail");
-             cred = await _auth.signInWithEmailAndPassword(
-                email: realEmail, 
-                password: password
-             );
-          }
-        } catch (e) {
-           // Fallthrough
-        }
-      }
-
-      // ❌ FINAL CHECK
-      if (cred == null) {
-          if (shadowAuthError != null) throw shadowAuthError; // Throw the password error if we found a shadow account
-          throw FirebaseAuthException(code: 'invalid-credential', message: "Login failed.");
-      }
+      // 2. Authenticate (Single Attempt)
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: emailToTry!, 
+        password: password,
+      );
 
       final uid = cred.user!.uid;
+      debugPrint("✅ Auth Success. UID: $uid (Used: $emailToTry)");
 
-      debugPrint("✅ Auth Success. UID: $uid");
-
-      // 🔍 STEP 3: Verify Role
+      // 3. Verify Role in Firestore (Isolated Check)
       final userDoc = await _fire.collection('users').doc(uid).get();
-      debugPrint("📄 User Doc Exists: ${userDoc.exists}");
-
+      
       if (!userDoc.exists) {
+        // This handles cases where Auth exists but DB record was deleted (Zombie account)
         await _auth.signOut();
-        throw "User record not found in database";
+        throw "Your admin record was not found in the database. Please contact the Super Admin.";
       }
 
       final role = userDoc.data()?['role'];
-      debugPrint("👮 User Role: $role");
-      
       if (role != 'admin' && role != 'super_admin') {
         await _auth.signOut();
-        throw "Access denied. Admins only.";
+        throw "Access denied. Your account does not have administrator privileges.";
       }
 
       if (!mounted) return;
 
-      // ✅ SUCCESS → DASHBOARD
+      // 🎉 SUCCESS → DASHBOARD
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Login Successful! Redirecting..."), backgroundColor: Colors.green),
       );
       
-      // Delay slightly to show success message
       await Future.delayed(const Duration(milliseconds: 500));
       Navigator.pushReplacementNamed(context, '/dashboard');
+
     } on FirebaseAuthException catch (e) {
       debugPrint("❌ Auth Error: ${e.code} - ${e.message}");
       String msg = e.message ?? "Auth Error";
-      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-        msg = "Invalid username or password.";
+      
+      if (e.code == 'network-request-failed') {
+        msg = "Network connection failed. If you are using a custom domain, ensure it is whitelisted in Firebase Console (Authentication -> Settings -> Authorized Domains).";
+      } else if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
+        msg = "Invalid credentials. Please check your username and password.";
       }
-      _showError("Login failed: $msg");
+      
+      _showError(msg);
     } catch (e) {
       debugPrint("❌ General Error: $e");
       _showError(e.toString());

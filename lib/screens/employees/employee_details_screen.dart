@@ -201,14 +201,17 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
               CircleAvatar(
                 radius: 32,
                 backgroundColor: AdminHelpers.getAvatarColor(user.name).withOpacity(0.12),
-                child: Text(
-                  user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AdminHelpers.getAvatarColor(user.name),
-                  ),
-                ),
+                backgroundImage: user.profilePicUrl?.isNotEmpty == true ? NetworkImage(user.profilePicUrl!) : null,
+                child: user.profilePicUrl?.isNotEmpty == true 
+                  ? null 
+                  : Text(
+                      user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AdminHelpers.getAvatarColor(user.name),
+                      ),
+                    ),
               ),
               const SizedBox(width: 16),
               Expanded(

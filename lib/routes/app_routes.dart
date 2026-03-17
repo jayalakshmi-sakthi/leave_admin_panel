@@ -30,6 +30,8 @@ import '../screens/notifications/admin_notifications_screen.dart';
 import '../screens/settings/department_admins_screen.dart'; // ✅ Added
 
 class AppRoutes {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>(); // ✅ Added for global navigation
+
   // 🔐 AUTH
   static const String root = '/';
   static const String adminLogin = '/admin-login';
