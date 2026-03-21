@@ -316,7 +316,7 @@ class NotificationService {
   }) async {
     try {
       // NOTE: You must paste your REST API Key here (from your screenshot)
-      const String onesignalRestKey = "os_v2_app_xxxxxxxxxxxxxxxxxxxxxxxxxxx"; // TODO: PASTE LEGACY API KEY HERE
+      const String onesignalRestKey = "os_v2_app_o3zqwpuc7nemxdekrdgzstq2dsdwpeskurnuminkdxxxrcstohcv6do2woumo7wyydr7dts3adn7bdrv5i52ioq4qrgqk3nq2tbgm2q"; 
       const String appId = "76f30b3e-82fb-48cb-8c8a-88cd994e1a1c";
 
       final response = await http.post(
