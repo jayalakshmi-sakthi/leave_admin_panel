@@ -31,6 +31,15 @@ class NotificationService {
     } else {
       OneSignal.initialize(appId);
       OneSignal.Notifications.requestPermission(true);
+
+      // 🖱️ OneSignal click listener (Admin)
+      OneSignal.Notifications.addClickListener((event) {
+        final data = event.notification.additionalData;
+        if (data != null) {
+          debugPrint("🔔 Admin OneSignal Clicked: $data");
+          _navController.add(Map<String, dynamic>.from(data));
+        }
+      });
     }
 
     // 🌐 WEB DEEP LINK CHECK
