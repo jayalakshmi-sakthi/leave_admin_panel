@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js' as js; // ✅ For OneSignal Web Interop
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http; // ✅ For OneSignal REST API
+import 'package:onesignal_flutter/onesignal_flutter.dart'; 
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -20,9 +23,14 @@ class NotificationService {
   Stream<Map<String, dynamic>> get navigationStream => _navController.stream;
 
   Future<void> init() async {
-    // 🔔 ONESIGNAL INIT (Free Layer 2)
+    // 🔔 ONESIGNAL INIT (Multi-platform)
+    const String appId = '76f30b3e-82fb-48cb-8c8a-88cd994e1a1c';
+
     if (kIsWeb) {
-      js.context.callMethod('initOneSignal', ['76f30b3e-82fb-48cb-8c8a-88cd994e1a1c']);
+      js.context.callMethod('initOneSignal', [appId]);
+    } else {
+      OneSignal.initialize(appId);
+      OneSignal.Notifications.requestPermission(true);
     }
 
     // 🌐 WEB DEEP LINK CHECK
@@ -90,9 +98,14 @@ class NotificationService {
   // --- Auth Integration ---
   void setUserId(String? userId) {
     _currentUserId = userId;
-    if (userId != null && kIsWeb) {
-      // 🔗 Link this browser session to the Firestore UID in OneSignal
-      js.context.callMethod('setOneSignalUser', [userId]);
+    if (userId != null) {
+      if (kIsWeb) {
+        // 🔗 Link this browser session (Web)
+        js.context.callMethod('setOneSignalUser', [userId]);
+      } else {
+        // 🔗 Link this app session (Mobile/Desktop)
+        OneSignal.login(userId);
+      }
     }
   }
 
