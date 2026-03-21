@@ -118,14 +118,23 @@ class FirestoreService {
     }
 
     if (academicYearId != null && academicYearId != 'All') {
-      query = query.where('academicYearId', isEqualTo: academicYearId);
+      // ✅ Only use DB-level filter for specific departments to avoid Index Requirement in Super Admin 'All' view
+      if (department != 'All') {
+        query = query.where('academicYearId', isEqualTo: academicYearId);
+      }
     }
 
     return query.snapshots().map((snapshot) {
-      final requests = snapshot.docs
+      final List<LeaveRequestModel> allRequests = snapshot.docs
           .map((doc) => LeaveRequestModel.fromMap(
               doc.data() as Map<String, dynamic>, doc.id))
           .toList();
+
+      // ✅ In-memory filtering for Super Admin 'All' view to avoid Index restriction
+      List<LeaveRequestModel> requests = allRequests;
+      if (department == 'All' && academicYearId != null && academicYearId != 'All') {
+        requests = allRequests.where((r) => r.academicYearId == academicYearId).toList();
+      }
 
       requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 

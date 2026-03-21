@@ -42,6 +42,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _selectedAcademicYear = 'All';
   List<String> _academicYears = ['All'];
   String _adminDepartment = 'General'; // Default
+  String _adminName = 'Admin User'; // ✅ Added for Sidebar Sync
   String? _adminProfilePic;
   bool _isSuperAdmin = false;
   bool _isLoading = true; // ✅ New: Loading State
@@ -78,8 +79,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       // 1. Handle "New User" or Registration notifications
       if (type == 'new_user' || (data['title']?.toString().toLowerCase().contains('registration') ?? false)) {
-         setState(() => _selectedIndex = 4); 
-         Navigator.pushNamed(context, '/pending-users'); // Adjust route as needed
+         setState(() => _selectedIndex = 4); // Switch to Notifications tab check
+         Navigator.pushNamed(
+           context, 
+           AppRoutes.pendingUsers, 
+           arguments: {'departmentFilter': _isSuperAdmin ? 'All' : _adminDepartment}
+         );
          return;
       }
 
@@ -186,6 +191,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                _isSuperAdmin = false;
                _adminDepartment = userDoc.department; 
              }
+             _adminName = userDoc.name;
              _adminProfilePic = userDoc.profilePicUrl;
            });
         }
@@ -307,6 +313,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   child: DarkSidebar(
                     selectedIndex: _selectedIndex,
                     isDesktop: false,
+                    adminName: _adminName, // ✅ Consistent
+                    adminDepartment: _adminDepartment, // ✅ Consistent
                     profilePicUrl: _adminProfilePic, // ✅ Added
                     onItemSelected: (index) {
                       if (index == -1) {
@@ -326,6 +334,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 DarkSidebar(
                   selectedIndex: _selectedIndex,
                   isDesktop: true,
+                  adminName: _adminName, // ✅ Consistent
+                  adminDepartment: _adminDepartment, // ✅ Consistent
                   profilePicUrl: _adminProfilePic, // ✅ Added
                   onItemSelected: (index) {
                     if (index == -1) {
@@ -474,7 +484,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       case 4:
         return AdminNotificationsScreen(departmentFilter: _adminDepartment); 
       case 5:
-        return DepartmentCalendarScreen(); // ✅ Reverted name
+        return DepartmentCalendarScreen(adminDepartment: _adminDepartment, selectedYear: _selectedAcademicYear); // ✅ Isolation
       case 6:
         return SettingsScreen(adminDepartment: _adminDepartment);
       default:
@@ -514,7 +524,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildNotificationIcon() {
     return StreamBuilder<int>(
-      stream: NotificationService().getUnreadCount(FirebaseAuth.instance.currentUser?.uid ?? ''),
+      stream: NotificationService().getUnreadCount(FirebaseAuth.instance.currentUser?.uid ?? '', departmentFilter: _adminDepartment),
       builder: (context, snapshot) {
         final count = snapshot.data ?? 0;
         return Stack(

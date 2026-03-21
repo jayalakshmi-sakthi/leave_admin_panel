@@ -46,29 +46,33 @@ class LeaveRequestModel {
   });
 
   factory LeaveRequestModel.fromMap(Map<String, dynamic> data, String id) {
+    DateTime parseDate(dynamic d) {
+      if (d is Timestamp) return d.toDate();
+      if (d is String) return DateTime.tryParse(d) ?? DateTime.now();
+      return DateTime.now();
+    }
+
     return LeaveRequestModel(
       id: id,
       userId: data['userId'] ?? '',
       userName: data['userName'] ?? 'Unknown',
       employeeId: data['employeeId'],
       leaveType: data['leaveType'] ?? 'Leave',
-      fromDate: (data['fromDate'] as Timestamp).toDate(),
-      toDate: (data['toDate'] as Timestamp).toDate(),
+      fromDate: parseDate(data['fromDate']),
+      toDate: parseDate(data['toDate']),
       numberOfDays: (data['numberOfDays'] ?? 0).toDouble(),
       reason: data['reason'] ?? '',
       status: data['status'] ?? 'Pending',
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: parseDate(data['createdAt']),
       approvedBy: data['approvedBy'],
-      approvedAt: data['approvedAt'] != null
-          ? (data['approvedAt'] as Timestamp).toDate()
-          : null,
+      approvedAt: data['approvedAt'] != null ? parseDate(data['approvedAt']) : null,
       isHalfDay: data['isHalfDay'] ?? false,
       halfDaySession: data['halfDaySession'],
       signedFormUrl: data['signedFormUrl'],
       finalSignedFormUrl: data['finalSignedFormUrl'],
       academicYearId: data['academicYearId'],
       department: data['department'], 
-      applicationId: data['applicationId'], // ✅ Added
+      applicationId: data['applicationId'],
     );
   }
 

@@ -9,6 +9,8 @@ class DarkSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final bool isDesktop;
   final String? profilePicUrl; // ✅ Added
+  final String? adminName; // ✅ Added
+  final String? adminDepartment; // ✅ Added
 
   const DarkSidebar({
     super.key,
@@ -16,6 +18,8 @@ class DarkSidebar extends StatelessWidget {
     required this.onItemSelected,
     required this.isDesktop,
     this.profilePicUrl, // ✅ Added
+    this.adminName, // ✅ Added
+    this.adminDepartment, // ✅ Added
   });
 
   @override
@@ -136,9 +140,9 @@ class DarkSidebar extends StatelessWidget {
         stream: FirestoreService().getUserStream(FirebaseAuth.instance.currentUser?.uid ?? ''),
         builder: (context, snapshot) {
           final user = snapshot.data;
-          final name = user?.name ?? "Admin User";
+          final name = adminName ?? user?.name ?? "Admin User";
           final isSuperAdmin = user?.role == 'super_admin';
-          final department = isSuperAdmin ? "Super Admin" : (user?.department ?? "General");
+          final department = adminDepartment ?? (isSuperAdmin ? "Super Admin" : (user?.department ?? "General"));
           final finalProfilePic = profilePicUrl ?? user?.profilePicUrl;
           final hasPic = finalProfilePic != null && finalProfilePic.isNotEmpty;
 

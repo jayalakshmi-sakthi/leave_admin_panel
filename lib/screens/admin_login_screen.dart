@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/notification_service.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -101,6 +102,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       }
 
       if (!mounted) return;
+
+      // 🔗 Link Admin session to OneSignal
+      NotificationService().setUserId(uid);
 
       // 🎉 SUCCESS → DASHBOARD
       ScaffoldMessenger.of(context).showSnackBar(
@@ -206,70 +210,64 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
                 try {
                   String? emailToSend;
+                  String? usernameFound;
 
                   // 🔍 STEP 1: Smart Lookup
-                  QuerySnapshot? snap;
+                  QuerySnapshot snap = await _fire.collection('users')
+                      .where(input.contains('@') ? 'email' : 'username', isEqualTo: input)
+                      .limit(1)
+                      .get();
                   
-                  if (input.contains('@')) {
-                    // Try finding by Recovery Email OR Auth Email
+                  if (snap.docs.isEmpty && input.contains('@')) {
                     snap = await _fire.collection('users')
                         .where('recoveryEmail', isEqualTo: input)
-                        .limit(1)
-                        .get();
-                    
-                    if (snap.docs.isEmpty) {
-                       snap = await _fire.collection('users')
-                         .where('email', isEqualTo: input)
-                         .limit(1)
-                         .get();
-                    }
-                  } else {
-                    // Try finding by Username
-                    snap = await _fire.collection('users')
-                        .where('username', isEqualTo: input)
                         .limit(1)
                         .get();
                   }
 
                   // 🎯 STEP 2: Resolve Email
-                  if (snap != null && snap.docs.isNotEmpty) {
+                  if (snap.docs.isNotEmpty) {
                     final data = snap.docs.first.data() as Map<String, dynamic>;
-                    // Prefer the Auth Email for reset (Firebase requirement), 
-                    // but the ink will arrive at the real inbox due to aliasing/plus-addressing.
-                    emailToSend = data['email']; 
-                  } else {
-                    // If not found in DB but looks like email, try sending directly (legacy/superadmin)
-                    if (input.contains('@')) emailToSend = input;
+                    emailToSend = data['email'];
+                    usernameFound = data['username'];
+                    
+                    // Priority check for recovery email
+                    if (data['recoveryEmail'] != null && data['recoveryEmail'].toString().contains('@')) {
+                      emailToSend = data['recoveryEmail'];
+                    }
+                  } else if (input.contains('@')) {
+                    emailToSend = input; // Direct email attempt
                   }
 
                   // 📧 STEP 3: Send Reset
                   if (emailToSend != null) {
+                    if (emailToSend.endsWith('@leavex.admin')) {
+                      throw "This account ($emailToSend) does not have a real mailbox. Please contact the Super Admin to manually reset your password.";
+                    }
+
                     await _auth.sendPasswordResetEmail(email: emailToSend);
-                    debugPrint("📧 Reset link sent to: $emailToSend");
                     
                     if (mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text("✅ Reset link sent to: $emailToSend\n(Check Spam folder too!)"),
+                          content: Text("✅ Reset link sent to: $emailToSend"),
                           backgroundColor: Colors.green,
                           behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 8),
-                          margin: const EdgeInsets.all(20),
                         ),
                       );
                     }
                   } else {
-                     debugPrint("❌ User not found for reset: $input");
-                     if (mounted) {
-                        // For this internal app, let's be specific
-                        _showError("Username '$input' not found within users collection.");
-                        setDialogState(() => loading = false); // Stop loading manually since we didn't pop
-                     }
+                     _showError("User '$input' not found. Please check your username.");
                   }
+                } on FirebaseAuthException catch (e) {
+                  String msg = e.message ?? "Error";
+                  if (e.code == 'user-not-found') {
+                    msg = "No registered account found for this email in our security system.";
+                  }
+                  _showError(msg);
                 } catch (e) {
-                  debugPrint("❌ Reset Error: $e");
-                  _showError("Error: ${e.toString()}");
+                  _showError(e.toString());
                 } finally {
                   if (mounted) setDialogState(() => loading = false);
                 }

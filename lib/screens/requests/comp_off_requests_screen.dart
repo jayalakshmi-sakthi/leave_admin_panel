@@ -49,7 +49,7 @@ class _CompOffRequestsScreenState extends State<CompOffRequestsScreen> with Sing
             .doc((widget.adminDepartment != null && widget.adminDepartment != 'All' && widget.adminDepartment != 'General') ? widget.adminDepartment : 'CSE')
             .collection('records');
       }
-      if (widget.selectedYear != 'All') {
+      if (widget.selectedYear != 'All' && widget.adminDepartment != 'All') {
         q = q.where('academicYearId', isEqualTo: widget.selectedYear);
       }
       return q.snapshots();
@@ -61,6 +61,11 @@ class _CompOffRequestsScreenState extends State<CompOffRequestsScreen> with Sing
         final docs = snapshot.data?.docs ?? [];
         var allRequests = docs.map((d) => d.data() as Map<String, dynamic>).toList();
         
+        // ✅ In-memory filter for Super Admin 'All' view to avoid Index Error
+        if (widget.adminDepartment == 'All' && widget.selectedYear != 'All') {
+          allRequests = allRequests.where((r) => r['academicYearId'] == widget.selectedYear).toList();
+        }
+
         // Add ID to each record for child components
         for (var i = 0; i < docs.length; i++) {
           allRequests[i]['id'] = docs[i].id;

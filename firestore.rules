@@ -18,25 +18,25 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    /// Super Admin only
+    /// Super Admin check (Case-insensitive + Email bypass)
     function isSuperAdmin() {
       return isAuthenticated() && 
-             (request.auth.token.email == 'leave752@gmail.com' ||
-              (hasUserDoc() && (myUserDoc().role == 'super_admin' || myUserDoc().role == 'SUPER_ADMIN')));
+             (request.auth.token.email.lower() == 'leave752@gmail.com' ||
+              (hasUserDoc() && (myUserDoc().role in ['super_admin', 'SUPER_ADMIN', 'Super Admin'])));
     }
 
-    /// Admin = role is 'admin' or 'super_admin'
+    /// Admin check
     function isAdmin() {
       return isSuperAdmin() || 
              (isAuthenticated() && hasUserDoc() &&
-              (myUserDoc().role == 'admin' || myUserDoc().role == 'ADMIN'));
+              (myUserDoc().role in ['admin', 'ADMIN', 'Admin']));
     }
 
-    /// Admin can only access their own department
+    /// Admin of Department check (includes Super Admins & 'All' department admins)
     function isAdminOfDept(dept) {
       return isSuperAdmin() || 
-             (isAuthenticated() && hasUserDoc() &&
-              (myUserDoc().role == 'admin' || myUserDoc().role == 'ADMIN') &&
+             (isAuthenticated() && hasUserDoc() && 
+              (myUserDoc().role in ['admin', 'ADMIN', 'Admin']) &&
               (myUserDoc().department == dept || myUserDoc().department == 'All'));
     }
 
@@ -47,23 +47,20 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────
     match /users/{userId} {
       // 🔓 PUBLIC LOGIN LOOKUP
-      // Allow searching for a user record by username while unauthenticated.
-      // This enables Strategy 3 in our login logic (Username -> Email mapping).
       allow list: if request.auth == null && request.query.limit == 1;
 
-      // Staff: own document
+      // Staff: Read/Write own document
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
-      // Admin: can read/write users in their own department
-      allow read: if isAdmin() &&
-                     (request.auth.uid == userId ||
-                      (hasUserDoc() && resource.data.department == myUserDoc().department) ||
-                      isSuperAdmin());
+      // Admin/Super Admin: Management access
+      // Allow read/create/update if Admin of the target department
+      allow read: if isAdminOfDept(resource.data.department);
+      allow create, update: if isAdminOfDept(request.resource.data.department);
 
-      allow update: if isAdmin() &&
-                       (resource.data.department == myUserDoc().department || isSuperAdmin());
+      // Allow delete only for Super Admin
+      allow delete: if isSuperAdmin();
 
-      // Comp-Off Grants (old path kept for migration compatibility)
+      // Comp-Off Grants (legacy path)
       match /compOffGrants/{grantId} {
         allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
         allow write: if isAdmin();

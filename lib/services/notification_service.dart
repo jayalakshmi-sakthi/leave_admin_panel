@@ -1,11 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // ✅ Added for Color
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:async';
-import 'dart:convert'; // ✅ Added for JSON
+import 'dart:convert';
+import 'dart:js' as js; // ✅ For OneSignal Web Interop
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http; // ✅ For OneSignal REST API
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -23,46 +20,9 @@ class NotificationService {
   Stream<Map<String, dynamic>> get navigationStream => _navController.stream;
 
   Future<void> init() async {
-    // 1. Request Permission
-    final settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-    debugPrint('User granted permission: ${settings.authorizationStatus}');
-
-    // 2. Get Token (and refresh)
-    final token = await _fcm.getToken();
-    debugPrint("🔥 FCM Token: $token");
-    _saveToken(token, _currentUserId);
-
-    _fcm.onTokenRefresh.listen((newToken) {
-      _saveToken(newToken, _currentUserId);
-    });
-
-    // 3. Handle Foreground Messages (FCM)
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('Got a message whilst in the foreground!');
-      debugPrint('Message data: ${message.data}');
-      // Broadcast to UI regardless (data only or notification data)
-      _uiController.add(message.data);
-      
-      // Skip System Tray Notification in Foreground for Admin Panel 
-      // because listenForNewNotifications already handles the Firestore document added.
-      debugPrint("🔔 FCM Foreground Message (Payload Only): ${message.data}");
-    });
-
-    // 4. Handle Background Click (App Opened)
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('A new onMessageOpenedApp event was published!');
-      _handleInteraction(message);
-    });
-    
-    // 5. Check Initial Message (Terminated State)
-    final initialMessage = await _fcm.getInitialMessage();
-    if (initialMessage != null) {
-      _handleInteraction(initialMessage);
+    // 🔔 ONESIGNAL INIT (Free Layer 2)
+    if (kIsWeb) {
+      js.context.callMethod('initOneSignal', ['76f30b3e-82fb-48cb-8c8a-88cd994e1a1c']);
     }
 
     // 🌐 WEB DEEP LINK CHECK
@@ -130,8 +90,9 @@ class NotificationService {
   // --- Auth Integration ---
   void setUserId(String? userId) {
     _currentUserId = userId;
-    if (userId != null) {
-      _fcm.getToken().then((token) => _saveToken(token, userId));
+    if (userId != null && kIsWeb) {
+      // 🔗 Link this browser session to the Firestore UID in OneSignal
+      js.context.callMethod('setOneSignalUser', [userId]);
     }
   }
 
@@ -231,7 +192,10 @@ class NotificationService {
          for (var change in snap.docChanges) {
            if (change.type == DocumentChangeType.added) {
              final data = change.doc.data();
-             final createdAt = (data?['createdAt'] as Timestamp?)?.toDate();
+             final rawCreatedAt = data?['createdAt'];
+             final createdAt = (rawCreatedAt is Timestamp) 
+                 ? rawCreatedAt.toDate() 
+                 : (rawCreatedAt is String ? DateTime.tryParse(rawCreatedAt) : null);
              
              // Only show if received in the last 10 seconds (real-time enough)
              final isRecent = createdAt != null && createdAt.isAfter(DateTime.now().subtract(const Duration(seconds: 10)));
@@ -303,8 +267,8 @@ class NotificationService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. Trigger FCM Push (Background/System Tray)
-      await sendFcmPush(
+      // 2. Trigger OneSignal Push (Background/System Tray)
+      await sendOneSignalPush(
         toUserId: toUserId,
         title: title,
         body: body,
@@ -313,7 +277,7 @@ class NotificationService {
           'relatedId': relatedId ?? '',
           'leaveType': leaveType ?? '',
           'academicYearId': academicYearId ?? '',
-          'targetDepartment': targetDepartment ?? '', // ✅ Push data
+          'targetDepartment': targetDepartment ?? '',
         },
       );
     } catch (e) {
@@ -321,55 +285,73 @@ class NotificationService {
     }
   }
 
-  Future<void> sendFcmPush({
+  /// 🔔 REST API call to OneSignal (Free Layer 2)
+  Future<void> sendOneSignalPush({
     required String toUserId,
     required String title,
     required String body,
     Map<String, dynamic>? data,
   }) async {
     try {
-      // Get User's Token
-      final userDoc = await _db.collection('users').doc(toUserId).get();
-      final token = userDoc.data()?['fcmToken'];
-      
-      if (token == null) {
-        debugPrint("No FCM token for user $toUserId. Skipping push.");
-        return;
-      }
+      // NOTE: You must paste your REST API Key here (from your screenshot)
+      const String onesignalRestKey = "os_v2_app_xxxxxxxxxxxxxxxxxxxxxxxxxxx"; // TODO: PASTE LEGACY API KEY HERE
+      const String appId = "76f30b3e-82fb-48cb-8c8a-88cd994e1a1c";
 
-      // Instead of sending directly (security risk), we queue it for a Cloud Function
-      // or a simple collection that a backend script monitors.
-      await _db.collection('fcm_queue').add({
-        'token': token,
-        'title': title,
-        'body': body,
-        'data': data,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      debugPrint("🚀 FCM Push Queued for $toUserId");
+      final response = await http.post(
+        Uri.parse('https://onesignal.com/api/v1/notifications'),
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Basic $onesignalRestKey',
+        },
+        body: jsonEncode({
+          'app_id': appId,
+          'include_external_user_ids': [toUserId], // Targeting the specific person
+          'headings': {'en': title},
+          'contents': {'en': body},
+          'data': data,
+          // Web specific tweaks
+          'web_url': 'https://leave-management-app-f07b8.web.app/#/notifications', // Fallback URL
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint("🚀 OneSignal Push Sent Successfully to $toUserId");
+      } else {
+        debugPrint("❌ OneSignal Error (${response.statusCode}): ${response.body}");
+      }
     } catch (e) {
-      debugPrint("FCM Push Error: $e");
+      debugPrint("OneSignal Push Exception: $e");
     }
   }
 
-  Stream<List<Map<String, dynamic>>> streamNotifications(String userId) {
-    return _db
+  Stream<List<Map<String, dynamic>>> streamNotifications(String userId, {String? departmentFilter}) {
+    Query query = _db
         .collection('notifications')
-        .where('toUserId', isEqualTo: userId)
+        .where('toUserId', isEqualTo: userId);
+        
+    if (departmentFilter != null && departmentFilter != 'All') {
+      query = query.where('targetDepartment', isEqualTo: departmentFilter);
+    }
+
+    return query
         .limit(50)
         .snapshots()
         .map((snap) {
-          final notifications = snap.docs.map((d) {
-            final data = d.data();
+          final List<Map<String, dynamic>> notifications = snap.docs.map((d) {
+            final Map<String, dynamic> data = Map<String, dynamic>.from(d.data() as Map);
             data['id'] = d.id;
             return data;
           }).toList();
+
+          DateTime parseDate(dynamic d) {
+            if (d is Timestamp) return d.toDate();
+            if (d is String) return DateTime.tryParse(d) ?? DateTime.now();
+            return DateTime.now();
+          }
           
           notifications.sort((a, b) {
-            final aTime = a['createdAt'] as Timestamp?;
-            final bTime = b['createdAt'] as Timestamp?;
-            if (aTime == null || bTime == null) return 0;
+            final aTime = parseDate(a['createdAt']);
+            final bTime = parseDate(b['createdAt']);
             return bTime.compareTo(aTime);
           });
           
@@ -377,14 +359,23 @@ class NotificationService {
         });
   }
 
-  Stream<int> getUnreadCount(String userId) {
+  Stream<int> getUnreadCount(String userId, {String? departmentFilter}) {
     if (userId.isEmpty) return Stream.value(0);
-    return _db
+    
+    Query query = _db
         .collection('notifications')
         .where('toUserId', isEqualTo: userId)
-        .where('isRead', isEqualTo: false)
-        .snapshots()
-        .map((snap) => snap.docs.length);
+        .where('isRead', isEqualTo: false);
+        
+    if (departmentFilter != null && departmentFilter != 'All') {
+      // Note: This relies on targetDepartment being present in the document.
+      // If we want to show global notifications (targetDepartment == null) even in isolated view,
+      // we'd need a more complex query or in-memory filtering. 
+      // For now, let's keep it strictly isolated to the department.
+      query = query.where('targetDepartment', isEqualTo: departmentFilter);
+    }
+    
+    return query.snapshots().map((snap) => snap.docs.length);
   }
 
   Future<void> markAsRead(String notificationId) async {

@@ -9,7 +9,8 @@ import '../../utils/admin_helpers.dart';
 
 class DepartmentCalendarScreen extends StatefulWidget {
   final String? adminDepartment; // Legacy support
-  const DepartmentCalendarScreen({super.key, this.adminDepartment});
+  final String? selectedYear; // ✅ Added for isolation
+  const DepartmentCalendarScreen({super.key, this.adminDepartment, this.selectedYear});
 
   @override
   State<DepartmentCalendarScreen> createState() => _DepartmentCalendarScreenState();
@@ -105,7 +106,10 @@ class _DepartmentCalendarScreenState extends State<DepartmentCalendarScreen> {
         // Removed global action button to move it to the panel
       ),
       body: StreamBuilder<List<LeaveRequestModel>>(
-        stream: _firestoreService.getLeaveRequestsStream(department: widget.adminDepartment ?? 'CSE'), // ✅ Dept-scoped
+        stream: _firestoreService.getLeaveRequestsStream(
+          department: widget.adminDepartment ?? 'CSE', 
+          academicYearId: widget.selectedYear
+        ), // ✅ Isolated
         builder: (context, snapshot) {
           if (snapshot.hasData) {
             _events = _groupLeaves(snapshot.data!);

@@ -48,17 +48,24 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
         );
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          // 🔄 Fallback: Use 'Plus Addressing' (email+admin@domain.com)
-          // This creates a unique Firebase account but delivers email to the same inbox.
-          final parts = recoveryEmail.split('@');
-          if (parts.length == 2) {
-             finalAuthEmail = "${parts[0]}+admin@${parts[1]}";
-             cred = await auth.createUserWithEmailAndPassword(
-                email: finalAuthEmail,
-                password: password,
-             );
-          } else {
-            rethrow;
+          // 🔄 Case A: User exists in Auth but maybe missing Firestore record?
+          // We can try signing in with the provided password to verify ownership & get UID
+          try {
+            cred = await auth.signInWithEmailAndPassword(email: recoveryEmail, password: password);
+            debugPrint("🔗 Re-using existing Auth account for $recoveryEmail");
+          } catch (signInErr) {
+             // If sign-in fails, it's either the wrong password or a truly different account.
+             // Proceded to Fallback Plus Addressing
+             final parts = recoveryEmail.split('@');
+             if (parts.length == 2) {
+                finalAuthEmail = "${parts[0]}+admin@${parts[1]}";
+                cred = await auth.createUserWithEmailAndPassword(
+                   email: finalAuthEmail,
+                   password: password,
+                );
+             } else {
+               rethrow;
+             }
           }
         } else {
           rethrow;
@@ -406,32 +413,32 @@ class _DepartmentAdminsScreenState extends State<DepartmentAdminsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveContainer(
-      child: Scaffold(
-        backgroundColor: AdminHelpers.scaffoldBg,
-        appBar: AppBar(
-          title: const Text("Department Admins", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1E293B),
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
-            onPressed: () => Navigator.pop(context),
-            tooltip: "Back",
-          ),
-          centerTitle: true,
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(color: AdminHelpers.border, height: 1),
-          ),
+    return Scaffold(
+      backgroundColor: AdminHelpers.scaffoldBg,
+      appBar: AppBar(
+        title: const Text("Department Admins", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
+          onPressed: () => Navigator.pop(context),
+          tooltip: "Back",
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _showAddDialog,
-          backgroundColor: Theme.of(context).brightness == Brightness.dark ? AdminHelpers.secondaryColor : AdminHelpers.primaryColor,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text("Add Admin", style: TextStyle(color: Colors.white)),
+        centerTitle: true,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: AdminHelpers.border, height: 1),
         ),
-        body: _loading
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddDialog,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? AdminHelpers.secondaryColor : AdminHelpers.primaryColor,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text("Add Admin", style: TextStyle(color: Colors.white)),
+      ),
+      body: ResponsiveContainer(
+        child: _loading
             ? const Center(child: CircularProgressIndicator())
             : StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance

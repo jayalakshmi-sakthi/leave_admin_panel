@@ -195,12 +195,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildSecurityCard(),
                   const SizedBox(height: 32),
 
+                  _buildSectionHeader("User Management", Icons.people_outline),
+                  const SizedBox(height: 16),
+                  _buildPendingApprovalsCard(),
+                  const SizedBox(height: 16),
                   if (_isSuperAdmin) ...[
-                    _buildSectionHeader("User Management", Icons.people),
-                    const SizedBox(height: 16),
-                    _buildUserManagementCard(),
+                    _buildAdminManagementCard(),
                     const SizedBox(height: 32),
                   ],
+                  if (!_isSuperAdmin) const SizedBox(height: 32),
 
                   _buildSectionHeader("Academic Year", Icons.calendar_today),
                   const SizedBox(height: 16),
@@ -364,19 +367,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildUserManagementCard() {
+  Widget _buildPendingApprovalsCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
       child: Row(
         children: [
-          const Icon(Icons.admin_panel_settings, color: primaryNavy, size: 28),
+          const Icon(Icons.person_add_outlined, color: primaryNavy, size: 28),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Pending Approvals", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                Text("Review and approve new staff registrations for ${_isSuperAdmin ? 'all departments' : _selectedDepartment}.", style: const TextStyle(fontSize: 11, color: AdminHelpers.textMuted)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pushNamed(
+              context, 
+              AppRoutes.pendingUsers,
+              arguments: {'departmentFilter': _isSuperAdmin ? 'All' : _selectedDepartment}
+            ),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryNavy, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: const Text("Review"),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminManagementCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Row(
+        children: [
+          const Icon(Icons.admin_panel_settings_outlined, color: primaryNavy, size: 28),
           const SizedBox(width: 16),
           const Expanded(child: Text("Manage Dept Admins", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold))),
           ElevatedButton(
             onPressed: () => Navigator.pushNamed(context, AppRoutes.departmentAdmins),
             style: ElevatedButton.styleFrom(backgroundColor: primaryNavy, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: const Text("Open"),
+            child: const Text("Manage"),
           )
         ],
       ),

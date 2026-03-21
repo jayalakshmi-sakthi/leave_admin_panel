@@ -36,20 +36,11 @@ class AdminNotificationsScreen extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: NotificationService().streamNotifications(user.uid),
+        stream: NotificationService().streamNotifications(user.uid, departmentFilter: departmentFilter),
         builder: (context, snapshot) {
-          final allNotifications = snapshot.data ?? [];
+          final notifications = snapshot.data ?? [];
           
-            // 🔎 APPLY FILTER
-          final notifications = allNotifications.where((n) {
-            if (departmentFilter == null || departmentFilter == 'All') return true;
-            
-            final target = n['targetDepartment']?.toString();
-            // Case-insensitive match or null
-            // If target is null, it's a global notification. We only show it in 'All' view.
-            if (target == null) return true; // ✅ Show global notifications to everyone
-            return target.toLowerCase() == departmentFilter!.toLowerCase();
-          }).toList();
+          // Row 43-52 Filtering no longer needed as it's done in the query
 
           if (notifications.isEmpty) {
             final bool isFiltered = departmentFilter != null && departmentFilter != 'All';
