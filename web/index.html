@@ -172,22 +172,41 @@
     
     // Helper function for Flutter to initialize OneSignal with a Specific App ID
     window.initOneSignal = function(appId) {
-      console.log("🔔 [OneSignal] Initializing with ID: " + appId);
+      console.log("🔔 [OneSignal] Initializing Admin with ID: " + appId);
       OneSignal.push(async function() {
         await OneSignal.init({
           appId: appId,
           allowLocalhostAsSecureOrigin: true,
+          serviceWorkerParam: { scope: '/push/onesignal/' },
+          serviceWorkerPath: 'OneSignalSDKWorker.js'
         });
-        console.log("✅ [OneSignal] Initialization complete");
+        console.log("✅ [OneSignal] Admin init complete");
+        
+        // ✅ CRITICAL: Request browser notification permission
+        const permission = await OneSignal.Notifications.requestPermission();
+        console.log("🔔 [OneSignal] Admin Permission:", permission);
+
+        // ✅ Listen for notification clicks — redirect to the detail page
+        OneSignal.Notifications.addEventListener('click', function(event) {
+          const data = event.notification.additionalData;
+          console.log("🔔 [OneSignal] Admin notification clicked:", data);
+          if (data && data.relatedId) {
+            const year = data.academicYearId || '2024-2025';
+            const url = window.location.origin + window.location.pathname
+              + '#/detail?id=' + encodeURIComponent(data.relatedId)
+              + '&year=' + encodeURIComponent(year);
+            window.open(url, '_self');
+          }
+        });
       });
     };
 
     // Helper function for Flutter to set external user ID (mapping to Firestore UID)
     window.setOneSignalUser = function(externalId) {
-      console.log("🔗 [OneSignal] Linking User: " + externalId);
+      console.log("🔗 [OneSignal] Linking Admin User: " + externalId);
       OneSignal.push(async function() {
         await OneSignal.login(externalId);
-        console.log("✅ [OneSignal] User linked");
+        console.log("✅ [OneSignal] Admin user linked:", externalId);
       });
     };
 
@@ -195,7 +214,7 @@
     window.logoutOneSignal = function() {
       OneSignal.push(async function() {
         await OneSignal.logout();
-        console.log("🚪 [OneSignal] User logged out");
+        console.log("🚪 [OneSignal] Admin user logged out");
       });
     };
   </script>
