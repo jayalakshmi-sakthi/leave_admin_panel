@@ -8,6 +8,7 @@ import '../../services/notification_service.dart';
 import '../../utils/admin_helpers.dart';
 import '../../models/user_model.dart';
 import '../../widgets/responsive_container.dart';
+import 'media_viewer_screen.dart'; // ✅ Added
 
 class LeaveRequestDetailScreen extends StatefulWidget {
   final LeaveRequestModel? request;
@@ -469,10 +470,16 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        onPressed: () async {
-          if (await canLaunchUrl(Uri.parse(url))) {
-            await launchUrl(Uri.parse(url));
-          }
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+               builder: (_) => MediaViewerScreen(
+                 url: url,
+                 title: label,
+               )
+            ),
+          );
         },
         icon: Icon(icon, size: 18),
         label: Text(label),

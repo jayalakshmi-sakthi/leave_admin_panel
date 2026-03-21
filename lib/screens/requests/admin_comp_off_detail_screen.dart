@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../utils/admin_helpers.dart';
 import '../../services/firestore_service.dart';
 import '../../services/notification_service.dart';
+import 'media_viewer_screen.dart'; // ✅ Added
 
 class AdminCompOffDetailScreen extends StatefulWidget {
   final String docId;
@@ -219,9 +220,16 @@ class _AdminCompOffDetailScreenState extends State<AdminCompOffDetailScreen> {
                   // ATTACHMENT
                   if (d['proofUrl'] != null && (d['proofUrl'] as String).isNotEmpty)
                     InkWell(
-                      onTap: () async {
-                        final uri = Uri.parse(d['proofUrl']);
-                        if (await canLaunchUrl(uri)) await launchUrl(uri);
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                             builder: (_) => MediaViewerScreen(
+                               url: d['proofUrl'],
+                               title: "Work Evidence",
+                             )
+                          ),
+                        );
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Container(

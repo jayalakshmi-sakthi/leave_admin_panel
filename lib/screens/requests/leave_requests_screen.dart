@@ -10,6 +10,7 @@ import '../../services/notification_service.dart';
 import 'admin_leave_detail_screen.dart';
 import '../../utils/admin_helpers.dart';
 import '../../widgets/responsive_container.dart';
+import 'media_viewer_screen.dart'; // ✅ Added
 
 /// ==================================================
 /// 🎨 GLOBAL THEME CONSTANTS
@@ -434,11 +435,16 @@ class _LeaveRequestCard extends StatelessWidget {
                     // Initial Attachment (e.g. Med Cert)
                     if (request.signedFormUrl != null && request.signedFormUrl!.isNotEmpty)
                       OutlinedButton.icon(
-                        onPressed: () async {
-                            final uri = Uri.parse(request.signedFormUrl!);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri);
-                            }
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                               builder: (_) => MediaViewerScreen(
+                                 url: request.signedFormUrl!,
+                                 title: "Proof Attachment",
+                               )
+                            ),
+                          );
                         },
                         icon: const Icon(Icons.description_outlined, size: 18),
                         label: const Text("Proof"),
@@ -452,11 +458,16 @@ class _LeaveRequestCard extends StatelessWidget {
                     // Signed Copy (Post-Approval)
                     if (request.finalSignedFormUrl != null && request.finalSignedFormUrl!.isNotEmpty)
                       OutlinedButton.icon(
-                        onPressed: () async {
-                            final uri = Uri.parse(request.finalSignedFormUrl!);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri);
-                            }
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                               builder: (_) => MediaViewerScreen(
+                                 url: request.finalSignedFormUrl!,
+                                 title: "Signed Copy",
+                               )
+                            ),
+                          );
                         },
                         icon: const Icon(Icons.verified_rounded, size: 18),
                         label: const Text("Signed Copy"),
