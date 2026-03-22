@@ -13,6 +13,11 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'notification_service_stub.dart' if (dart.library.html) 'notification_service_web.dart' as js_helper;
 import '../main.dart';
 
+@pragma('vm:entry-point')
+Future<void> fcmBackgroundHandler(RemoteMessage message) async {
+  debugPrint("🔥 [Admin FCM Background] Message ID: ${message.messageId}");
+}
+
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
@@ -45,17 +50,51 @@ class NotificationService {
     if (kIsWeb) {
       js_helper.initOneSignal(appId);
     } else {
-      OneSignal.initialize(appId);
-      OneSignal.Notifications.requestPermission(true);
+      try {
+        OneSignal.initialize(appId);
+        OneSignal.Notifications.requestPermission(true);
+      } catch (e) {
+        debugPrint("❌ OneSignal Admin Init Failed: $e");
+      }
 
-      // 🖱️ OneSignal click listener (Admin)
       OneSignal.Notifications.addClickListener((event) {
         final data = event.notification.additionalData;
         if (data != null) {
-          debugPrint("🔔 Admin OneSignal Clicked: $data");
+          debugPrint("🔔 OneSignal Clicked (Admin): $data");
           _navController.add(Map<String, dynamic>.from(data));
         }
       });
+    }
+
+    // 🔔 2. FCM INIT (Direct Layer)
+    try {
+      if (!kIsWeb) {
+         await _fcm.requestPermission(alert: true, badge: true, sound: true);
+         
+         String? fcmToken = await _fcm.getToken();
+         if (fcmToken != null) {
+           debugPrint("🔥 Admin FCM DEVICE TOKEN: $fcmToken");
+         }
+
+         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+            debugPrint("🔥 [Admin FCM Foreground]: ${message.notification?.title}");
+            if (message.notification != null) {
+               showLocalNotification(
+                  id: message.hashCode,
+                  title: message.notification!.title!,
+                  body: message.notification!.body!,
+                  payload: jsonEncode(message.data),
+               );
+            }
+         });
+
+         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+            debugPrint("🔥 [Admin FCM Background Click]: ${message.data}");
+            _navController.add(message.data);
+         });
+      }
+    } catch (e) {
+      debugPrint("⚠️ Admin FCM Init Error: $e");
     }
 
     // 🌐 WEB DEEP LINK CHECK
@@ -125,11 +164,14 @@ class NotificationService {
     _currentUserId = userId;
     if (userId != null) {
       if (kIsWeb) {
-        // 🔗 Link this browser session (Web)
         js_helper.setOneSignalUser(userId);
       } else {
-        // 🔗 Link this app session (Mobile/Desktop)
         OneSignal.login(userId);
+        
+        // 🔥 Link FCM Token (Admin)
+        _fcm.getToken().then((token) {
+           if (token != null) _saveToken(token, userId);
+        });
       }
     }
   }

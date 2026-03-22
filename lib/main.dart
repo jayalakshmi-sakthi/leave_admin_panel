@@ -27,6 +27,12 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // 🔥 FCM Background Handler (Admin)
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
+    debugPrint("🚀 [DART] Admin FCM Background Handler Registered");
+  }
+
   // ⚡ Enable Firestore offline cache safely (Persistence is default on some platforms)
   if (!kIsWeb) {
     try {
