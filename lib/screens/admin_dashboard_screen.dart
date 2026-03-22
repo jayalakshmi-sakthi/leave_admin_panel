@@ -291,16 +291,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool isDesktop = constraints.maxWidth >= 900;
+        final bool isDesktop = constraints.maxWidth >= 1024; // Increased threshold for better desktop view
 
         return Scaffold(
-          backgroundColor: AdminHelpers.scaffoldBg, // Light Blue-Grey
+          backgroundColor: AdminHelpers.scaffoldBg,
           appBar: !isDesktop
               ? AppBar(
                   backgroundColor: AdminHelpers.primaryColor,
                   elevation: 0,
+                  centerTitle: true,
                   iconTheme: const IconThemeData(color: Colors.white),
-                  title: const Text("LeaveX", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  title: const Text(
+                    "LeaveX Admin",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
                   actions: [
                      _buildNotificationIcon(),
                      const SizedBox(width: 4),
@@ -311,13 +320,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               : null,
           drawer: !isDesktop
               ? Drawer(
-                  width: 260,
+                  width: 280,
+                  elevation: 0,
                   child: DarkSidebar(
                     selectedIndex: _selectedIndex,
                     isDesktop: false,
-                    adminName: _adminName, // ✅ Consistent
-                    adminDepartment: _adminDepartment, // ✅ Consistent
-                    profilePicUrl: _adminProfilePic, // ✅ Added
+                    adminName: _adminName,
+                    adminDepartment: _adminDepartment,
+                    profilePicUrl: _adminProfilePic,
                     onItemSelected: (index) {
                       if (index == -1) {
                          _logout();
@@ -648,81 +658,81 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Dynamic Spacing based on width
-        final double spacing = constraints.maxWidth < 600 ? 12 : 24;
+        final double width = constraints.maxWidth;
+        int crossAxisCount = width > 1024 ? 4 : (width > 600 ? 2 : 2);
+        double spacing = width > 600 ? 20 : 12;
         
-        if (constraints.maxWidth < 700) {
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: [
-              _statCard(total, "Total", Icons.folder_copy_rounded, AdminHelpers.primaryColor, width: (constraints.maxWidth - spacing - 2) / 2),
-              _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning, width: (constraints.maxWidth - spacing - 2) / 2),
-              _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success, width: (constraints.maxWidth - spacing - 2) / 2),
-              _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger, width: (constraints.maxWidth - spacing - 2) / 2),
-            ],
-          );
-        }
-        return Row(
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: width > 1200 ? 1.8 : 1.4,
           children: [
-            Expanded(child: _statCard(total, "Total Records", Icons.folder_copy_rounded, AdminHelpers.primaryColor)),
-             const SizedBox(width: 24),
-            Expanded(child: _statCard(pending, "Pending Approval", Icons.hourglass_top_rounded, AdminHelpers.warning)),
-             const SizedBox(width: 24),
-            Expanded(child: _statCard(approved, "Approved Requests", Icons.verified_user_rounded, AdminHelpers.success)),
-             const SizedBox(width: 24),
-            Expanded(child: _statCard(rejected, "Rejected / Cancelled", Icons.cancel_presentation_rounded, AdminHelpers.danger)),
+            _statCard(total, "Total Records", Icons.folder_copy_rounded, AdminHelpers.primaryColor),
+            _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning),
+            _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success),
+            _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger),
           ],
         );
       }
     );
   }
 
-  Widget _statCard(int value, String label, IconData icon, Color color, {double? width}) {
+  Widget _statCard(int value, String label, IconData icon, Color color) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
-      width: width,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AdminHelpers.darkSurface : Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AdminHelpers.darkBorder : color.withOpacity(0.12), width: 1.5),
-        boxShadow: isDark ? [] : [
-          BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.05) : color.withOpacity(0.12),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: color.withOpacity(0.1), 
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withOpacity(0.2), width: 1),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              Text(
+                value.toString(),
+                style: TextStyle(
+                  color: isDark ? Colors.white : AdminHelpers.textMain,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: isDark ? Colors.grey[400] : AdminHelpers.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.8,
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            value.toString(), 
-            style: TextStyle(
-              fontSize: 32, 
-              fontWeight: FontWeight.w900, 
-              letterSpacing: -1.0, 
-              color: isDark ? Colors.white : AdminHelpers.textMain
-            )
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label.toUpperCase(), 
-            style: TextStyle(
-              fontSize: 11, 
-              fontWeight: FontWeight.bold, 
-              color: isDark ? Colors.grey[400] : AdminHelpers.textMuted, 
-              letterSpacing: 0.8
-            )
           ),
         ],
       ),

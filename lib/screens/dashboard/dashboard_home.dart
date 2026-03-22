@@ -73,37 +73,42 @@ class DashboardHome extends StatelessWidget {
           }
         }
 
-        return Row(
-          children: [
-            SummaryCard(
-              title: "Total Records", 
-              value: total.toString(), 
-              icon: Icons.folder_copy_rounded, 
-              color: AdminHelpers.primaryColor,
-              onTap: () {},
-            ),
-            SummaryCard(
-              title: "Pending Approval", 
-              value: pending.toString(), 
-              icon: Icons.hourglass_top_rounded, 
-              color: AdminHelpers.warning,
-              onTap: () {},
-            ),
-            SummaryCard(
-              title: "Approved Requests", 
-              value: approved.toString(), 
-              icon: Icons.verified_user_rounded, 
-              color: AdminHelpers.success,
-              onTap: () {},
-            ),
-            SummaryCard(
-              title: "Rejected Entries", 
-              value: rejected.toString(), 
-              icon: Icons.cancel_presentation_rounded, 
-              color: AdminHelpers.danger,
-              onTap: () {},
-            ),
-          ],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final double width = constraints.maxWidth;
+            if (width < 600) {
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: SummaryCard(title: "Total Records", value: total.toString(), icon: Icons.folder_copy_rounded, color: AdminHelpers.primaryColor, onTap: () {})),
+                      const SizedBox(width: 12),
+                      Expanded(child: SummaryCard(title: "Pending", value: pending.toString(), icon: Icons.hourglass_top_rounded, color: AdminHelpers.warning, onTap: () {})),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: SummaryCard(title: "Approved", value: approved.toString(), icon: Icons.verified_user_rounded, color: AdminHelpers.success, onTap: () {})),
+                      const SizedBox(width: 12),
+                      Expanded(child: SummaryCard(title: "Rejected", value: rejected.toString(), icon: Icons.cancel_presentation_rounded, color: AdminHelpers.danger, onTap: () {})),
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: SummaryCard(title: "Total Records", value: total.toString(), icon: Icons.folder_copy_rounded, color: AdminHelpers.primaryColor, onTap: () {})),
+                const SizedBox(width: 16),
+                Expanded(child: SummaryCard(title: "Pending Approval", value: pending.toString(), icon: Icons.hourglass_top_rounded, color: AdminHelpers.warning, onTap: () {})),
+                const SizedBox(width: 16),
+                Expanded(child: SummaryCard(title: "Approved Requests", value: approved.toString(), icon: Icons.verified_user_rounded, color: AdminHelpers.success, onTap: () {})),
+                const SizedBox(width: 16),
+                Expanded(child: SummaryCard(title: "Rejected Entries", value: rejected.toString(), icon: Icons.cancel_presentation_rounded, color: AdminHelpers.danger, onTap: () {})),
+              ],
+            );
+          },
         );
       },
     );
