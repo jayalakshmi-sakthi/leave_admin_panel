@@ -372,13 +372,7 @@ class _ActionButtonState extends State<_ActionButton> {
         department: widget.request.department ?? 'CSE',
       );
 
-       await NotificationService().sendNotification(
-          toUserId: widget.request.userId,
-          title: 'On-Duty Request ${widget.newStatus}',
-          body: 'Your On-Duty request for ${AdminHelpers.formatDate(widget.request.fromDate)} has been ${widget.newStatus}.',
-          type: 'status_change',
-          relatedId: widget.request.id,
-        );
+      // Notification is handled centrally in FirestoreService.updateLeaveStatus
         
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request ${widget.newStatus}"), backgroundColor: Colors.green));

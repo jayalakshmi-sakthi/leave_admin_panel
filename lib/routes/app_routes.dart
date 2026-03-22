@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 // Admin screens
 import '../screens/admin_login_screen.dart';
+import '../screens/admin_signup_screen.dart'; // ✅ Added
 import '../screens/admin_dashboard_screen.dart';
 import '../auth_wrapper.dart';
 
@@ -35,6 +36,7 @@ class AppRoutes {
   // 🔐 AUTH
   static const String root = '/';
   static const String adminLogin = '/admin-login';
+  static const String adminSignup = '/admin-signup'; // ✅ Added
 
   // 🖥 DASHBOARD
   static const String adminDashboard = '/dashboard';
@@ -59,21 +61,13 @@ class AppRoutes {
     switch (routeSettings.name) {
       // ---------- ROOT (AUTH CHECK) ----------
       case root:
-        return MaterialPageRoute(
-          builder: (_) => const AuthWrapper(),
-        );
-
-      // ---------- AUTH ----------
+        return MaterialPageRoute(builder: (_) => const AuthWrapper());
       case adminLogin:
-        return MaterialPageRoute(
-          builder: (_) => const AdminLoginScreen(),
-        );
-
-      // ---------- DASHBOARD ----------
+        return MaterialPageRoute(builder: (_) => const AdminLoginScreen());
+      case adminSignup: // ✅ Added
+        return MaterialPageRoute(builder: (_) => const AdminSignupScreen());
       case adminDashboard:
-        return MaterialPageRoute(
-          builder: (_) => const AdminDashboardScreen(),
-        );
+        return MaterialPageRoute(builder: (_) => const AdminDashboardScreen());
 
       // ---------- HOME ----------
       case dashboardHome:

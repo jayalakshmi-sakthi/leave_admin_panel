@@ -171,26 +171,15 @@ class _RequestsTab extends StatelessWidget {
               request: requests[index],
               adminId: auth.currentUser?.uid ?? 'admin',
               onUpdateStatus: (status) async {
-                await firestoreService.updateLeaveStatus(
-                  requests[index].id,
-                  status,
-                  auth.currentUser?.uid ?? 'admin',
-                  department: requests[index].department ?? 'CSE',
-                );
-
-                // ✅ Send Notification to User
                 try {
-                  await NotificationService().sendNotification(
-                    toUserId: requests[index].userId,
-                    title: 'Leave Request $status',
-                    body: 'Your ${requests[index].leaveType} request for ${AdminHelpers.formatDate(requests[index].fromDate)} has been $status.',
-                    type: 'status_change',
-                    relatedId: requests[index].id,
-                    leaveType: requests[index].leaveType,
-                    academicYearId: requests[index].academicYearId,
+                  await firestoreService.updateLeaveStatus(
+                    requests[index].id,
+                    status,
+                    auth.currentUser?.uid ?? 'admin',
+                    department: requests[index].department ?? 'CSE',
                   );
                 } catch (e) {
-                  debugPrint("Notification Error: $e");
+                  debugPrint("Update Error: $e");
                 }
                 
                 // Show snackbar
@@ -403,23 +392,33 @@ class _LeaveRequestCard extends StatelessWidget {
                     color: theme.scaffoldBackgroundColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.start,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(Icons.calendar_today_rounded, size: 16, color: theme.primaryColor),
-                      const SizedBox(width: 10),
-                      Text(
-                        "${AdminHelpers.formatDate(request.fromDate)}  ➔  ${AdminHelpers.formatDate(request.toDate)}",
-                        style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.w600, fontSize: 13),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_today_rounded, size: 16, color: theme.primaryColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            "${AdminHelpers.formatDate(request.fromDate)}  ➔  ${AdminHelpers.formatDate(request.toDate)}",
+                            style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Container(width: 1, height: 16, color: theme.dividerColor),
-                      const SizedBox(width: 16),
-                      Icon(Icons.access_time_rounded, size: 16, color: theme.primaryColor),
-                      const SizedBox(width: 8),
-                      Text(
-                        "${request.numberOfDays} Days",
-                        style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.w600, fontSize: 13),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.access_time_rounded, size: 16, color: theme.primaryColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            "${request.numberOfDays} Days",
+                            style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
                       ),
                     ],
                   ),

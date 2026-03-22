@@ -149,10 +149,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         notifService.uiNotificationStream.listen((data) {
           if (!mounted) return;
           
-          // 🛡️ Filter by Department (Isolation)
-          final target = data['targetDepartment']?.toString();
-          if (_adminDepartment != 'All' && target != null && target != _adminDepartment) {
-            debugPrint("🔇 Muting dashboard alert for $target (Selected: $_adminDepartment)");
+          // 🛡️ Filter by Department (Isolation) - Case Insensitive
+          final target = data['targetDepartment']?.toString().trim().toLowerCase();
+          final currentDept = _adminDepartment.trim().toLowerCase();
+
+          if (currentDept != 'all' && target != null && target != currentDept) {
+            debugPrint("🔇 Muting dashboard alert for $target (Selected: $currentDept)");
             return;
           }
 

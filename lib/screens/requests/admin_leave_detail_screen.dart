@@ -108,19 +108,7 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
         _currentStatus = status;
       });
 
-      try {
-        await NotificationService().sendNotification(
-          toUserId: _request.userId,
-          title: 'Leave Request $status',
-          body: 'Your ${AdminHelpers.getLeaveName(_request.leaveType)} request for ${AdminHelpers.formatDate(_request.fromDate)} has been $status.',
-          type: 'status_change',
-          relatedId: _request.id,
-          leaveType: _request.leaveType,
-          academicYearId: _request.academicYearId,
-        );
-      } catch (e) {
-        debugPrint("Notification Error: $e");
-      }
+      // Notification is handled centrally in FirestoreService.updateLeaveStatus
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

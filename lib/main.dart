@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'routes/app_routes.dart';
 import 'services/notification_service.dart';
 import 'services/update_service.dart'; // ✅ Added
+import 'package:firebase_auth/firebase_auth.dart'; // ✅ Added
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +43,15 @@ Future<void> main() async {
   }
 
   // 🔔 Init notifications in background — don’t block app launch
-  Future.microtask(() => NotificationService().init());
+  Future.microtask(() async {
+    await NotificationService().init();
+    // 🛡️ Ensure already logged-in admin is identified for OneSignal!
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      debugPrint("🔍 [DART] Admin identified for OneSignal: ${user.uid}");
+      NotificationService().setUserId(user.uid);
+    }
+  });
 
   // 🔄 Update checker (Web only)
   UpdateService().init();

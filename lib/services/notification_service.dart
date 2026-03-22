@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:js' as js; // ✅ For OneSignal Web Interop
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +8,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http; // ✅ For OneSignal REST API
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+
+// 🛡️ Conditional Import for JS Interop (Web)
+import 'notification_service_stub.dart' if (dart.library.html) 'notification_service_web.dart' as js_helper;
+import '../main.dart';
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -25,12 +28,22 @@ class NotificationService {
   final _navController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get navigationStream => _navController.stream;
 
+  /// Request notification permissions (System Level)
+  Future<void> requestPermission() async {
+    if (kIsWeb) {
+      // Browsers handle this via OneSignal Web SDK
+      return; 
+    } else {
+      await OneSignal.Notifications.requestPermission(true);
+    }
+  }
+
   Future<void> init() async {
     // 🔔 ONESIGNAL INIT (Multi-platform)
     const String appId = '76f30b3e-82fb-48cb-8c8a-88cd994e1a1c';
 
     if (kIsWeb) {
-      js.context.callMethod('initOneSignal', [appId]);
+      js_helper.initOneSignal(appId);
     } else {
       OneSignal.initialize(appId);
       OneSignal.Notifications.requestPermission(true);
@@ -113,7 +126,7 @@ class NotificationService {
     if (userId != null) {
       if (kIsWeb) {
         // 🔗 Link this browser session (Web)
-        js.context.callMethod('setOneSignalUser', [userId]);
+        js_helper.setOneSignalUser(userId);
       } else {
         // 🔗 Link this app session (Mobile/Desktop)
         OneSignal.login(userId);
@@ -223,7 +236,7 @@ class NotificationService {
                  : (rawCreatedAt is String ? DateTime.tryParse(rawCreatedAt) : null);
              
              // Only show if received in the last 10 seconds (real-time enough)
-             final isRecent = createdAt != null && createdAt.isAfter(DateTime.now().subtract(const Duration(seconds: 10)));
+             final isRecent = createdAt != null && createdAt.isAfter(DateTime.now().subtract(const Duration(minutes: 5)));
              
              if (isRecent) {
                // 1. Show Local Notification (Android/iOS)
@@ -278,8 +291,11 @@ class NotificationService {
     String? targetDepartment, // ✅ Added for filtering
   }) async {
     try {
+      // 🔑 Deterministic ID to prevent duplicates (UserId + RelatedId + Type)
+      final String uniqueId = "${toUserId}_${relatedId ?? 'info'}_${type ?? 'general'}";
+
       // 1. Save to Firestore (Real-time DB)
-      await _db.collection('notifications').add({
+      await _db.collection('notifications').doc(uniqueId).set({
         'toUserId': toUserId,
         'title': title,
         'body': body,
@@ -287,7 +303,7 @@ class NotificationService {
         'relatedId': relatedId,
         'leaveType': leaveType,
         'academicYearId': academicYearId,
-        'targetDepartment': targetDepartment, // ✅ Added for filtering
+        'targetDepartment': targetDepartment,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -330,12 +346,25 @@ class NotificationService {
         },
         body: jsonEncode({
           'app_id': appId,
-          'include_external_user_ids': [toUserId], // Targeting the specific person
+          'include_aliases': {
+            'external_id': [toUserId]
+          },
           'headings': {'en': title},
           'contents': {'en': body},
           'data': data,
-          // Web specific tweaks
-          'web_url': 'https://leave-management-app-f07b8.web.app/#/notifications', // Fallback URL
+          'priority': 10, // High Priority for background delivery (WhatsApp style)
+          'android_channel_id': 'admin_alerts_channel', 
+          'android_visibility': 1, 
+          'android_accent_color': 'FF7C3AED', 
+          'android_led_color': 'FF7C3AED',
+          'ios_badgeType': 'Increase',
+          'ios_badgeCount': 1,
+          'ios_sound': 'default',
+          'android_sound': 'default',
+          // 🛡️ Route intelligently based on target
+          'web_url': data?['type'] == 'leave_request' 
+              ? 'https://admin-leavex.web.app/#/requests'
+              : 'https://leavex-staff.web.app/#/notifications', 
         }),
       );
 
@@ -355,7 +384,8 @@ class NotificationService {
         .where('toUserId', isEqualTo: userId);
         
     if (departmentFilter != null && departmentFilter != 'All') {
-      query = query.where('targetDepartment', isEqualTo: departmentFilter);
+      // ✅ Standardize filter for case-insensitive match
+      query = query.where('targetDepartment', isEqualTo: departmentFilter.trim().toUpperCase());
     }
 
     return query
@@ -393,11 +423,8 @@ class NotificationService {
         .where('isRead', isEqualTo: false);
         
     if (departmentFilter != null && departmentFilter != 'All') {
-      // Note: This relies on targetDepartment being present in the document.
-      // If we want to show global notifications (targetDepartment == null) even in isolated view,
-      // we'd need a more complex query or in-memory filtering. 
-      // For now, let's keep it strictly isolated to the department.
-      query = query.where('targetDepartment', isEqualTo: departmentFilter);
+      // ✅ Standardize filter for case-insensitive match
+      query = query.where('targetDepartment', isEqualTo: departmentFilter.trim().toUpperCase());
     }
     
     return query.snapshots().map((snap) => snap.docs.length);

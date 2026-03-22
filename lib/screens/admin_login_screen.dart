@@ -125,17 +125,38 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       }
       
       _showError(msg);
-    } catch (e) {
-      debugPrint("❌ General Error: $e");
-      _showError(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   // --------------------------------------------------
-  // ❌ ERROR SNACKBAR
+  // 🌐 GOOGLE SIGN-IN (PREMIUM ALTERNATIVE)
   // --------------------------------------------------
+  Future<void> _signInWithGoogle() async {
+    setState(() => _loading = true);
+    try {
+      final googleProvider = GoogleAuthProvider();
+      // Use signInWithPopup for Web
+      final UserCredential cred = await _auth.signInWithPopup(googleProvider);
+      final uid = cred.user!.uid;
+
+      // Check role
+      final userDoc = await _fire.collection('users').doc(uid).get();
+      if (!userDoc.exists || (userDoc.data()?['role'] != 'admin' && userDoc.data()?['role'] != 'super_admin')) {
+         // This triggers the Access Restricted screen in AuthWrapper/Dashboard load logic
+      }
+
+      if (!mounted) return;
+      NotificationService().setUserId(uid);
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    } catch (e) {
+      _showError("Google Sign-In failed: $e");
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -374,6 +395,27 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
                 const SizedBox(height: 20),
                 _buildLoginButton(),
+
+                const SizedBox(height: 16),
+                const Text("OR", style: TextStyle(color: softText, fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+
+                // 🌐 Google Login
+                _buildGoogleButton(),
+
+                const SizedBox(height: 32),
+                
+                // 📝 Create Account Link (Dev Only/New Admin)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("New Admin?", style: TextStyle(color: softText, fontSize: 13)),
+                    TextButton(
+                      onPressed: () => Navigator.pushNamed(context, AppRoutes.adminSignup), 
+                      child: const Text("Create Account", style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -381,6 +423,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       ),
     );
   }
+
+  Widget _buildGoogleButton() => SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: OutlinedButton.icon(
+          onPressed: _loading ? null : _signInWithGoogle,
+          icon: Image.network('https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg', width: 24, errorBuilder: (_,__,___) => const Icon(Icons.g_mobiledata, color: Colors.blue)),
+          label: const Text("Login with Google", style: TextStyle(color: darkSlate, fontWeight: FontWeight.bold)),
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+        ),
+      );
 
   // --------------------------------------------------
   // 🧩 UI HELPERS

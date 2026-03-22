@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -420,41 +421,23 @@ class _ActionButtonState extends State<_ActionButton> {
   Future<void> _update() async {
     setState(() => _loading = true);
     try {
-      final fire = FirebaseFirestore.instance;
-      // 1. Update Request
-      await fire.collection('compOffRequests').doc(widget.docId).update({
-        'status': widget.newStatus,
-        'actionTakenAt': FieldValue.serverTimestamp(),
-      });
-
-      // 2. If Approved, Create Grant in User's Subcollection
-      if (widget.newStatus == 'Approved') {
-        final userId = widget.data['userId'];
-        final rawDays = widget.data['days'];
-        final daysToCheck = (rawDays is num) ? rawDays.toDouble() : double.tryParse(rawDays.toString()) ?? 0.0;
-
-        if (daysToCheck > 0 && userId != null) {
-          await fire
-              .collection('users')
-              .doc(userId)
-              .collection('compOffGrants')
-              .add({
-            'userId': userId,
-            'days': daysToCheck,
-            'sourceRequestId': widget.docId,
-            'academicYearId': widget.data['academicYearId'] ?? '2024-2025',
-            'grantedAt': FieldValue.serverTimestamp(),
-            'workedDate': widget.data['workedDate'],
-            'reason': widget.data['description'] ?? 'Approved via Dashboard',
-          });
-        }
-      }
+      final fire = FirestoreService();
+      final auth = FirebaseAuth.instance;
+      
+      // Use the central service which handles both Firestore update AND Notification
+      await fire.updateCompOffStatus(
+        widget.docId,
+        widget.newStatus,
+        auth.currentUser?.uid ?? 'admin',
+        department: widget.data['department'] ?? 'CSE',
+        data: widget.data,
+      );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request ${widget.newStatus}")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request ${widget.newStatus}"), backgroundColor: Colors.green));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -503,63 +486,23 @@ class _CompOffCardState extends State<_CompOffCard> {
   Future<void> _updateStatus(String newStatus) async {
     setState(() => _loading = true);
     try {
-      final fire = FirebaseFirestore.instance;
+      final fire = FirestoreService();
+      final auth = FirebaseAuth.instance;
       
-      // 1. Update Request
-      await fire.collection('compOffRequests').doc(widget.docId).update({
-        'status': newStatus,
-        'actionTakenAt': FieldValue.serverTimestamp(),
-      });
-
-      // 2. If Approved, Create Grant in User's Subcollection
-      if (newStatus == 'Approved') {
-        final userId = widget.data['userId'];
-        if (userId == null || userId.toString().isEmpty) {
-          throw Exception("User ID missing in request. Cannot grant.");
-        }
-
-        final rawDays = widget.data['days'];
-        final daysToCheck = (rawDays is num) ? rawDays.toDouble() : double.tryParse(rawDays.toString()) ?? 0.0;
-
-        if (daysToCheck > 0) {
-           await fire
-              .collection('users')
-              .doc(userId)
-              .collection('compOffGrants')
-              .add({
-            'userId': userId,
-            'days': daysToCheck,
-            'sourceRequestId': widget.docId,
-            'academicYearId': widget.data['academicYearId'] ?? '2024-2025',
-            'grantedAt': FieldValue.serverTimestamp(),
-            'workedDate': widget.data['workedDate'],
-            'reason': widget.data['description'] ?? 'Approved via Dashboard',
-          });
-        }
-      }
+      // Use the central service which handles both Firestore update AND Notification
+      await fire.updateCompOffStatus(
+        widget.docId,
+        newStatus,
+        auth.currentUser?.uid ?? 'admin',
+        department: widget.data['department'] ?? 'CSE',
+        data: widget.data,
+      );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request $newStatus")));
-      }
-
-      // Notification
-      try {
-        await NotificationService().sendNotification(
-          toUserId: widget.data['userId'],
-          title: 'Comp-Off Request $newStatus',
-          body: 'Your Comp-Off request for ${widget.data['days']} day(s) has been $newStatus.',
-          type: 'status_change',
-          relatedId: widget.docId,
-          leaveType: 'COMP',
-          academicYearId: widget.data['academicYearId'] ?? '2024-2025',
-        );
-      } catch (e) {
-        debugPrint("Notification Error: $e");
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request $newStatus"), backgroundColor: Colors.green));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

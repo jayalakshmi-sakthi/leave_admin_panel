@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../models/leave_request_model.dart';
+import '../services/notification_service.dart';
+import 'package:flutter/foundation.dart'; // for debugLog
 
 /// ============================================================
 /// FirestoreService — Performance-Optimized + Department-Isolated
@@ -90,6 +92,18 @@ class FirestoreService {
       'approvedBy': adminId,
       'approvedAt': FieldValue.serverTimestamp(),
     });
+
+    // 🔔 Notify User
+    try {
+      await NotificationService().sendNotification(
+        toUserId: uid,
+        title: 'Account Approved!',
+        body: 'Your account has been approved. You can now log in and apply for leaves.',
+        type: 'approval',
+      );
+    } catch(e) {
+      debugLog('Notification Failed for User $uid: $e');
+    }
   }
 
   Future<void> updateUserLeaveOverrides(
@@ -176,20 +190,24 @@ class FirestoreService {
         .collection('records')
         .doc(requestId);
 
+    // 1. Fetch Doc First (to get UID for notification)
+    final docSnap = await docRef.get();
+    if (!docSnap.exists) return;
+    final data = docSnap.data() as Map<String, dynamic>;
+    final String userId = data['userId'] ?? '';
+
+    // 2. Update Firestore Status
     await docRef.update({
       'status': status,
       'approvedBy': adminId,
       'approvedAt': FieldValue.serverTimestamp(),
     });
 
+    // 3. Grant Comp-Off if applicable
     if (status == 'Approved') {
       try {
-        final doc = await docRef.get();
-        if (doc.exists) {
-          final data = doc.data() as Map<String, dynamic>;
           final leaveType = data['leaveType'];
           if (leaveType == 'Comp-Off Earn' || leaveType == 'Comp-Off Earned') {
-            final userId = data['userId'];
             final days = data['numberOfDays'] as num;
             final academicYearId = data['academicYearId'];
             final reason = data['reason'];
@@ -207,10 +225,26 @@ class FirestoreService {
               'grantedBy': adminId,
             });
           }
-        }
       } catch (e) {
         debugLog('Failed to create Comp Off Grant: $e');
       }
+    }
+
+    // 4. Send Notification to STAFF (using Staff App's notification channel)
+    try {
+      if (userId.isNotEmpty) {
+        await NotificationService().sendNotification(
+          toUserId: userId,
+          title: 'Leave Request $status',
+          body: 'Your leave request for ${data['numberOfDays']} days has been $status.',
+          type: 'status_change',
+          relatedId: requestId,
+          leaveType: data['leaveType'],
+          academicYearId: data['academicYearId'],
+        );
+      }
+    } catch(e) {
+      debugLog('Staff Notification Failed ($requestId): $e');
     }
   }
 
@@ -223,15 +257,18 @@ class FirestoreService {
         .collection('records')
         .doc(requestId);
 
+    final String userId = data['userId'] ?? '';
+
+    // 1. Update Firestore Status
     await docRef.update({
       'status': status,
       'approvedBy': adminId,
       'approvedAt': FieldValue.serverTimestamp(),
     });
 
+    // 2. Grant Comp-Off if applicable
     if (status == 'Approved') {
       try {
-        final userId = data['userId'];
         final days = data['days'] as num;
         final academicYearId = data['academicYearId'];
         final description = data['description'];
@@ -252,6 +289,23 @@ class FirestoreService {
       } catch (e) {
         debugLog('Failed to grant comp-off: $e');
       }
+    }
+
+    // 3. Send Notification to STAFF
+    try {
+      if (userId.isNotEmpty) {
+        await NotificationService().sendNotification(
+          toUserId: userId,
+          title: 'Comp-Off Earn Request $status',
+          body: 'Your Comp-Off Earn request for ${data['days']} days has been $status.',
+          type: 'status_change',
+          relatedId: requestId,
+          leaveType: 'COMP-OFF EARN',
+          academicYearId: data['academicYearId'],
+        );
+      }
+    } catch(e) {
+      debugLog('Staff Notification Failed ($requestId): $e');
     }
   }
 
