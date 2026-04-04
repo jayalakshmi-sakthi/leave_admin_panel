@@ -21,10 +21,7 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for ios - '
@@ -36,10 +33,7 @@ class DefaultFirebaseOptions {
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -53,6 +47,23 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyB18d1-OXMqGMr80YTJ4VBuER_CxLga-zg',
+    appId: '1:476708106662:web:2f4f6cc251fa2db9e69f67',
+    messagingSenderId: '476708106662',
+    projectId: 'leave-management-app-f07b8',
+    authDomain: 'leave-management-app-f07b8.firebaseapp.com',
+    storageBucket: 'leave-management-app-f07b8.firebasestorage.app',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyBguzU19KqLZLyLCc8R6zFFivFu8jzLX1c',
+    appId: '1:476708106662:android:cf9792f064f436b9e69f67',
+    messagingSenderId: '476708106662',
+    projectId: 'leave-management-app-f07b8',
+    storageBucket: 'leave-management-app-f07b8.firebasestorage.app',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyB18d1-OXMqGMr80YTJ4VBuER_CxLga-zg',
     appId: '1:476708106662:web:2f4f6cc251fa2db9e69f67',
     messagingSenderId: '476708106662',

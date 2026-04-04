@@ -248,6 +248,57 @@ class FirestoreService {
     }
   }
 
+  // ──────────────────────────────────────────────────────────
+  // 🎟️ COMP-OFF REQUESTS (Dedicated Collection)
+  // ──────────────────────────────────────────────────────────
+
+  Stream<List<Map<String, dynamic>>> getCompOffRequestsStream({
+    required String department,
+    String? academicYearId,
+  }) {
+    Query query;
+    if (department == 'All') {
+      query = _db.collectionGroup('records').limit(300); // Larger limit for global view
+    } else {
+      query = _db
+          .collection('compOffRequests')
+          .doc(department)
+          .collection('records')
+          .limit(100);
+    }
+
+    return query.snapshots().map((snapshot) {
+      final List<Map<String, dynamic>> results = [];
+      
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        // Security/Sanity Check: Only include "Comp-Off Earn" type if collectionGroup is used
+        if (department == 'All' && data['leaveType'] != 'Comp-Off Earn' && data['leaveType'] != 'COMP-OFF EARN') {
+          continue;
+        }
+
+        data['id'] = doc.id; // Inject ID
+        
+        // Academic Year Filter
+        if (academicYearId != null && academicYearId != 'All') {
+          if (data['academicYearId'] != academicYearId) continue;
+        }
+
+        results.add(data);
+      }
+      
+      results.sort((a, b) {
+        final tsA = a['createdAt'] as Timestamp?;
+        final tsB = b['createdAt'] as Timestamp?;
+        if (tsA == null || tsB == null) return 0;
+        return tsB.compareTo(tsA);
+      });
+
+      return results;
+    });
+  }
+
   Future<void> updateCompOffStatus(
       String requestId, String status, String adminId,
       {required String department, required Map<String, dynamic> data}) async {

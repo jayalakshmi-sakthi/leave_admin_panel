@@ -185,10 +185,48 @@ class _AdminCompOffDetailScreenState extends State<AdminCompOffDetailScreen> {
                   ),
                   const SizedBox(height: 32),
                   
+                  // STAFF PROFILE SECTION
+                  Row(
+                    children: [
+                       FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(widget.data['userId']).get(),
+                          builder: (context, snap) {
+                            final userData = snap.data?.data() as Map?;
+                            final name = userData?['name'] ?? _userName;
+                            final profilePic = userData?['profilePicUrl'];
+                            return CircleAvatar(
+                               radius: 28,
+                               backgroundColor: AdminHelpers.getAvatarColor(name).withOpacity(0.1),
+                               backgroundImage: profilePic?.isNotEmpty == true ? NetworkImage(profilePic!) : null,
+                               child: profilePic?.isNotEmpty == true ? null : Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: TextStyle(color: AdminHelpers.getAvatarColor(name), fontSize: 20, fontWeight: FontWeight.bold)),
+                            );
+                          }
+                       ),
+                       const SizedBox(width: 16),
+                       Expanded(
+                         child: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                              Text(_userName.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(color: AdminHelpers.primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(_department, style: const TextStyle(color: AdminHelpers.primaryColor, fontWeight: FontWeight.bold, fontSize: 11)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text("ID: $_employeeId", style: const TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                           ],
+                         ),
+                       ),
+                    ],
+                  ),
+                  const Divider(height: 48, color: Color(0xFFE2E8F0)),
+                  
                   // DETAILS GRID
-                  _detailRow("Employee Name", _userName),
-                  _detailRow("Employee ID", _employeeId),
-                  _detailRow("Department", _department),
                   _detailRow("Date Worked", AdminHelpers.formatDate(workedDate)),
                   if (d['applicationId'] != null)
                     _detailRow("Application ID", d['applicationId']),

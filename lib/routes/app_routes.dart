@@ -156,7 +156,10 @@ class AppRoutes {
         // Supports only Map for now to avoid build issues
         if (args is Map) {
              return MaterialPageRoute(
-              builder: (_) => LeaveRequestDetailScreen(requestId: args['id']),
+              builder: (_) => LeaveRequestDetailScreen(
+                requestId: args['id'],
+                department: args['department'],
+              ),
             );
         }
         return _errorRoute("Invalid Arguments for Leave Detail");

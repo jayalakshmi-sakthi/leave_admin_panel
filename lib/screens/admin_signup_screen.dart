@@ -12,7 +12,7 @@ class AdminSignupScreen extends StatefulWidget {
 
 class _AdminSignupScreenState extends State<AdminSignupScreen> {
   final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _emailController = TextEditingController(); // ✅ Required
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
@@ -53,22 +53,30 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
     setState(() => _loading = true);
 
     try {
-      // 1. Check if Username is taken
-      final existing = await FirebaseFirestore.instance
+      // 1. Check if Email/Username is taken in Firestore
+      final emailCheck = await FirebaseFirestore.instance
           .collection('users')
-          .where('username', isEqualTo: username)
+          .where('email', isEqualTo: email)
+          .limit(1)
           .get();
       
-      if (existing.docs.isNotEmpty) {
+      if (emailCheck.docs.isNotEmpty) {
+        throw "This email is already registered. Please use a unique business email for your admin account.";
+      }
+
+      final userCheck = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+      
+      if (userCheck.docs.isNotEmpty) {
         throw "Username '$username' is already taken. Try another.";
       }
 
-      // 2. Use real email or fallback shadow email
-      final emailToUse = email.isNotEmpty ? email : "$username@leavex.admin";
-
-      // 3. Create Auth Account
+      // 2. Create Auth Account with Real Email
       final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailToUse, 
+        email: email, 
         password: password,
       );
 
@@ -85,10 +93,10 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
         'uid': uid,
         'name': name,
         'username': username,
-        'email': emailToUse,
+        'email': email,
         'role': role,
         'department': dept.isNotEmpty ? dept : 'General',
-        'isApproved': true, // Auto-approve first admin, others might need super-admin approval
+        'isApproved': true, 
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -138,6 +146,8 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
 
                 _buildInputField(controller: _nameController, label: "Full Name", hint: "e.g. John Doe", icon: Icons.person_outline),
                 const SizedBox(height: 16),
+                _buildInputField(controller: _emailController, label: "Official Email ID", hint: "e.g. admin@yourcollege.edu", icon: Icons.email_outlined, keyboard: TextInputType.emailAddress),
+                const SizedBox(height: 16),
                 _buildInputField(controller: _usernameController, label: "Admin Username", hint: "e.g. cse_admin", icon: Icons.alternate_email),
                 const SizedBox(height: 16),
                 _buildInputField(controller: _deptController, label: "Department", hint: "e.g. CSE or MECH", icon: Icons.business_outlined),
@@ -167,6 +177,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
     required String hint,
     required IconData icon,
     bool obscureText = false,
+    TextInputType? keyboard,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,6 +187,7 @@ class _AdminSignupScreenState extends State<AdminSignupScreen> {
         TextField(
           controller: controller,
           obscureText: obscureText,
+          keyboardType: keyboard,
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: Icon(icon, color: primaryBlue, size: 20),

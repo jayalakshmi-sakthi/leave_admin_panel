@@ -16,14 +16,9 @@ class AdminNotificationsScreen extends StatelessWidget {
     if (user == null) return const SizedBox();
 
     return Scaffold(
-      backgroundColor: AdminHelpers.scaffoldBg, // Admin Panel Background
+      backgroundColor: AdminHelpers.scaffoldBg, 
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Notifications", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
+        title: const Text("LeaveX Admin Notifs", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: AdminHelpers.primaryColor,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -38,10 +33,11 @@ class AdminNotificationsScreen extends StatelessWidget {
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: NotificationService().streamNotifications(user.uid, departmentFilter: departmentFilter),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+             return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
+          }
           final notifications = snapshot.data ?? [];
           
-          // Row 43-52 Filtering no longer needed as it's done in the query
-
           if (notifications.isEmpty) {
             final bool isFiltered = departmentFilter != null && departmentFilter != 'All';
             return Center(
@@ -62,7 +58,12 @@ class AdminNotificationsScreen extends StatelessWidget {
           // 🗓️ GROUP BY DATE
           final grouped = <String, List<Map<String, dynamic>>>{};
           for (var notif in notifications) {
-            final createdAt = (notif['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+             final rawCreatedAt = notif['createdAt'];
+             DateTime createdAt;
+             if (rawCreatedAt is Timestamp) createdAt = rawCreatedAt.toDate();
+             else if (rawCreatedAt is String) createdAt = DateTime.tryParse(rawCreatedAt) ?? DateTime.now();
+             else createdAt = DateTime.now();
+
             final now = DateTime.now();
             final diff = DateTime(now.year, now.month, now.day).difference(DateTime(createdAt.year, createdAt.month, createdAt.day)).inDays;
             
@@ -80,7 +81,6 @@ class AdminNotificationsScreen extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Section Header
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                     child: Text(
@@ -94,16 +94,15 @@ class AdminNotificationsScreen extends StatelessWidget {
                     ),
                   ),
                   
-                  // List Items
                   ...entry.value.map((notif) {
                     final isRead = notif['isRead'] == true;
                     final title = notif['title']?.toString() ?? 'Alert';
                     final body = notif['body']?.toString() ?? '';
-                    final createdAt = (notif['createdAt'] as Timestamp?)?.toDate();
+                    final rawCreatedAt = notif['createdAt'];
+                    final createdAt = (rawCreatedAt is Timestamp) ? rawCreatedAt.toDate() : null;
                     final leaveType = notif['leaveType']?.toString() ?? '';
                     final isDark = Theme.of(context).brightness == Brightness.dark;
                     
-                    // Unified Professional Color Strategy
                     Color color = AdminHelpers.primaryColor; 
                     IconData icon = Icons.info_outline;
 
@@ -115,113 +114,78 @@ class AdminNotificationsScreen extends StatelessWidget {
                       icon = Icons.person_add_alt_1_rounded;
                     }
 
-                    // Optional: Override icon with Dept icon if it's a general alert
-                    final String? targetDept = notif['targetDepartment'] as String?;
-                    if (targetDept != null && icon == Icons.info_outline) {
-                      icon = AdminHelpers.getDeptIcon(targetDept);
-                      color = AdminHelpers.getDeptColor(targetDept);
-                    }
-
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Dismissible(
-                        key: Key(notif['id']),
-                        background: Container(
-                          decoration: BoxDecoration(color: Colors.red[100], borderRadius: BorderRadius.circular(12)),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          child: Icon(Icons.delete_outline, color: Colors.red[800]),
-                        ),
-                        onDismissed: (_) {
-                          // Optional: Delete notification logic
-                        },
-                        child: InkWell(
+                      child: InkWell(
                           onTap: () async {
                             if (!isRead) {
                               await NotificationService().markAsRead(notif['id']);
                             }
                             
                             // 🧭 NAVIGATION LOGIC
-                            // Fetch detailed data before navigating
-                            final String? leaveType = notif['leaveType'] as String?;
+                            final String? lType = notif['leaveType'] as String?;
                             final String? relatedId = notif['relatedId'] as String?;
                             final String? academicYearId = notif['academicYearId'] as String?;
-                            final String? type = notif['type'] as String?; // ✅ Added Type
+                            final String? nType = notif['type'] as String?;
 
-                            if (relatedId != null && type != 'new_user') { // ✅ Avoid fetch for new_user
+                            if (relatedId != null && nType != 'new_user') {
                                try {
                                  final String? targetDept = notif['targetDepartment'] as String?;
                                  
-                                 // Determine functionality
-                                 if (leaveType == 'COMP' || leaveType == 'Comp-Off Earn') {
-                                   // Fetch Comp-Off (using isolated department path)
-                                   // Fallback to searching if dept mismatch or missing
-                                   DocumentSnapshot? doc;
-                                   
-                                   if (targetDept != null && targetDept.isNotEmpty) {
-                                      doc = await FirebaseFirestore.instance
-                                          .collection('compOffRequests') 
-                                          .doc(targetDept)
-                                          .collection('records')
-                                          .doc(relatedId)
-                                          .get();
-                                   }
+                                 if (nType == 'comp_off_request' || lType == 'COMP' || lType == 'Comp-Off Earn' || lType == 'Comp-Off') {
+                                    DocumentSnapshot? doc;
+                                    
+                                    if (targetDept != null && targetDept.isNotEmpty) {
+                                       doc = await FirebaseFirestore.instance
+                                           .collection('compOffRequests') 
+                                           .doc(targetDept)
+                                           .collection('records')
+                                           .doc(relatedId)
+                                           .get();
+                                    }
 
-                                   if (doc == null || !doc.exists) {
-                                      // Search across all departments (backup for legacy)
-                                      final search = await FirebaseFirestore.instance
-                                          .collectionGroup('records')
-                                          .where('applicationId', isEqualTo: relatedId) // or search by ID if possible
-                                          .get();
-                                      if (search.docs.isNotEmpty) doc = search.docs.first;
-                                   }
+                                    if (doc == null || !doc.exists) {
+                                       final search = await FirebaseFirestore.instance
+                                           .collectionGroup('records')
+                                           .where('id', isEqualTo: relatedId)
+                                           .limit(1)
+                                           .get();
+                                       if (search.docs.isNotEmpty) doc = search.docs.first;
+                                    }
 
-                                   if (doc != null && doc.exists && context.mounted) {
-                                      Navigator.pushNamed(
-                                        context, 
-                                        '/admin/comp-off-details',
-                                        arguments: {'docId': doc.id, 'data': doc.data()}
-                                      );
-                                   }
+                                    if (doc == null || !doc.exists) {
+                                       final searchAppId = await FirebaseFirestore.instance
+                                           .collectionGroup('records')
+                                           .where('applicationId', isEqualTo: relatedId)
+                                           .limit(1)
+                                           .get();
+                                       if (searchAppId.docs.isNotEmpty) doc = searchAppId.docs.first;
+                                    }
+
+                                    if (doc != null && doc.exists && context.mounted) {
+                                       Navigator.pushNamed(
+                                         context, 
+                                         '/admin/comp-off-details',
+                                         arguments: {'docId': doc.id, 'data': doc.data()}
+                                       );
+                                    }
                                  } else {
-                                   // Fetch Leave/OD
-                                   String yearId = academicYearId ?? '2024-2025';
-                                   if (academicYearId == null) {
-                                      final settings = await FirebaseFirestore.instance.collection('settings').doc('academic_year').get();
-                                      if (settings.exists) {
-                                         yearId = settings.data()?['id'] ?? '2024-2025';
-                                      }
-                                   }
-
-                                   // Search across all dept subcollections
-                                   final snap = await FirebaseFirestore.instance
-                                       .collectionGroup('records')
-                                       .where('id', isEqualTo: relatedId)
-                                       .limit(1)
-                                       .get();
-
-                                   if (snap.docs.isNotEmpty && context.mounted) {
-                                      final doc = snap.docs.first;
-                                      Navigator.pushNamed(
-                                        context,
-                                        '/requests/detail', 
-                                        arguments: {'id': doc.id},
-                                      );
-                                   }
+                                    Navigator.pushNamed(
+                                      context,
+                                      '/requests/detail',
+                                      arguments: {
+                                        'id': relatedId,
+                                        'academicYearId': academicYearId ?? '2024-2025',
+                                        'department': targetDept ?? 'General',
+                                      },
+                                    );
                                  }
                                } catch (e) {
                                  debugPrint("Navigation Error: $e");
-                                 if (context.mounted) {
-                                   ScaffoldMessenger.of(context).showSnackBar(
-                                     SnackBar(content: Text("Could not load details: $e")),
-                                   );
-                                 }
                                }
-                            } else if (type == 'new_user' || title.toLowerCase().contains('registration')) {
-                               // Direct Navigation for Registration
+                            } else if (nType == 'new_user' || title.toLowerCase().contains('registration')) {
                                Navigator.pushNamed(context, '/pending-users', arguments: {'departmentFilter': departmentFilter});
                             } else {
-                               // Default Fallback
                                Navigator.pushNamed(context, '/leave-requests'); 
                             }
                           },
@@ -287,7 +251,6 @@ class AdminNotificationsScreen extends StatelessWidget {
                                 )
                               ],
                             ),
-                          ),
                         ),
                       ),
                     );

@@ -10,6 +10,7 @@ import 'routes/app_routes.dart';
 import 'services/notification_service.dart';
 import 'services/update_service.dart'; // ✅ Added
 import 'package:firebase_auth/firebase_auth.dart'; // ✅ Added
+import 'package:firebase_messaging/firebase_messaging.dart'; // ✅ Added
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +79,7 @@ class LeaveAdminApp extends StatelessWidget {
       builder: (context, mode, child) {
         return MaterialApp(
           navigatorKey: AppRoutes.navigatorKey, // ✅ Added
-          title: 'LeaveX Admin Panel',
+          title: 'LeaveX Admin',
       debugShowCheckedModeBanner: false,
 
       /// 🎨 ADMIN THEME (Soulful & Premium)

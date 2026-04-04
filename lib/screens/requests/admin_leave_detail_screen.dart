@@ -13,8 +13,9 @@ import 'media_viewer_screen.dart'; // ✅ Added
 class LeaveRequestDetailScreen extends StatefulWidget {
   final LeaveRequestModel? request;
   final String? requestId;
+  final String? department; // ✅ Added for direct path fetch
 
-  const LeaveRequestDetailScreen({super.key, this.request, this.requestId});
+  const LeaveRequestDetailScreen({super.key, this.request, this.requestId, this.department});
 
   @override
   State<LeaveRequestDetailScreen> createState() => _LeaveRequestDetailScreenState();
@@ -46,28 +47,64 @@ class _LeaveRequestDetailScreenState extends State<LeaveRequestDetailScreen> {
   }
 
   Future<void> _fetchRequest(String id) async {
-      try {
-          final snap = await FirebaseFirestore.instance
-              .collectionGroup('records')
-              .where('id', isEqualTo: id)
-              .limit(1)
-              .get();
-          
-          if (snap.docs.isNotEmpty) {
-              final doc = snap.docs.first;
-              setState(() {
-                  _request = LeaveRequestModel.fromMap(doc.data(), doc.id);
-                  _currentStatus = _request.status;
-                  _initializing = false;
-              });
-              _initializeData();
-          } else {
-              if (mounted) setState(() => _initializing = false);
-          }
-      } catch (e) {
-          debugPrint("Error fetching request: $e");
-          if (mounted) setState(() => _initializing = false);
+    try {
+      DocumentSnapshot? docSnap;
+
+      // 1️⃣ Try direct path if department is known
+      if (widget.department != null && widget.department!.isNotEmpty && widget.department != 'All') {
+        docSnap = await FirebaseFirestore.instance
+            .collection('leaveRequests')
+            .doc(widget.department)
+            .collection('records')
+            .doc(id)
+            .get();
+        if (docSnap.exists == false) docSnap = null;
       }
+
+      // 2️⃣ Fallback: scan collectionGroup by applicationId field
+      if (docSnap == null) {
+        final snap = await FirebaseFirestore.instance
+            .collectionGroup('records')
+            .where('applicationId', isEqualTo: id)
+            .limit(1)
+            .get();
+        if (snap.docs.isNotEmpty) docSnap = snap.docs.first;
+      }
+
+      // 3️⃣ Last resort: scan all leaveRequests subcollections for matching doc ID
+      if (docSnap == null) {
+        // Try known departments by iterating common paths
+        final depts = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'MBA', 'MCA', 'All'];
+        for (final dept in depts) {
+          if (dept == 'All') continue;
+          final d = await FirebaseFirestore.instance
+              .collection('leaveRequests')
+              .doc(dept)
+              .collection('records')
+              .doc(id)
+              .get();
+          if (d.exists) {
+            docSnap = d;
+            break;
+          }
+        }
+      }
+
+      if (docSnap != null && docSnap.exists && mounted) {
+        setState(() {
+          _request = LeaveRequestModel.fromMap(
+              docSnap!.data() as Map<String, dynamic>, docSnap.id);
+          _currentStatus = _request.status;
+          _initializing = false;
+        });
+        _initializeData();
+      } else {
+        if (mounted) setState(() => _initializing = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching request: $e");
+      if (mounted) setState(() => _initializing = false);
+    }
   }
 
   Future<void> _initializeData() async {

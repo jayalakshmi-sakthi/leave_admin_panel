@@ -52,10 +52,10 @@ class _OnDutyRequestsScreenState extends State<OnDutyRequestsScreen> with Single
         final odRequests = allRequests.where((r) => r.leaveType == 'OD').toList();
 
         return ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(12),
           children: [
             _buildStatsRow(odRequests),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             Container(
               decoration: AdminHelpers.cardDecoration(context),
               child: Column(
@@ -77,7 +77,7 @@ class _OnDutyRequestsScreenState extends State<OnDutyRequestsScreen> with Single
                 ],
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
           ],
         );
       },
@@ -101,42 +101,33 @@ class _OnDutyRequestsScreenState extends State<OnDutyRequestsScreen> with Single
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Dynamic Spacing based on width
-        final double spacing = constraints.maxWidth < 600 ? 12 : 24;
+        final double width = constraints.maxWidth;
+        int crossAxisCount = width > 1000 ? 4 : (width > 600 ? 2 : 2);
+        double spacing = width > 600 ? 16 : 8;
         
-        if (constraints.maxWidth < 700) {
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: [
-              _statCard(total, "Total OD", Icons.business_center_rounded, AdminHelpers.primaryColor, width: (constraints.maxWidth - spacing - 2) / 2),
-              _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning, width: (constraints.maxWidth - spacing - 2) / 2),
-              _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success, width: (constraints.maxWidth - spacing - 2) / 2),
-              _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger, width: (constraints.maxWidth - spacing - 2) / 2),
-            ],
-          );
-        }
-        return Row(
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: width > 1200 ? 1.6 : (width > 600 ? 1.4 : 1.1),
           children: [
-            Expanded(child: _statCard(total, "Total OD", Icons.business_center_rounded, AdminHelpers.primaryColor)),
-             const SizedBox(width: 24),
-            Expanded(child: _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning)),
-             const SizedBox(width: 24),
-            Expanded(child: _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success)),
-             const SizedBox(width: 24),
-            Expanded(child: _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger)),
+            _statCard(total, "Total OD", Icons.business_center_rounded, AdminHelpers.primaryColor),
+            _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning),
+            _statCard(approved, "Approved", Icons.verified_user_rounded, AdminHelpers.success),
+            _statCard(rejected, "Rejected", Icons.cancel_presentation_rounded, AdminHelpers.danger),
           ],
         );
       }
     );
   }
 
-  Widget _statCard(int value, String label, IconData icon, Color color, {double? width}) {
+  Widget _statCard(int value, String label, IconData icon, Color color) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
-      width: width,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? AdminHelpers.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -147,34 +138,40 @@ class _OnDutyRequestsScreenState extends State<OnDutyRequestsScreen> with Single
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
                 color: color.withOpacity(0.1), 
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: color.withOpacity(0.2), width: 1),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(height: 20),
-          Text(
-            value.toString(), 
-            style: TextStyle(
-              fontSize: 32, 
-              fontWeight: FontWeight.w900, 
-              letterSpacing: -1.0, 
-              color: isDark ? Colors.white : AdminHelpers.textMain
-            )
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value.toString(), 
+              style: TextStyle(
+                fontSize: 24, 
+                fontWeight: FontWeight.w900, 
+                letterSpacing: -0.5, 
+                color: isDark ? Colors.white : AdminHelpers.textMain
+              )
+            ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label.toUpperCase(), 
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11, 
+              fontSize: 10, 
               fontWeight: FontWeight.bold, 
               color: isDark ? Colors.grey[400] : AdminHelpers.textMuted, 
-              letterSpacing: 0.8
+              letterSpacing: 0.5
             )
           ),
         ],
@@ -213,7 +210,7 @@ class _ODList extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.maxWidth < 900) {
           return ListView.separated(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(12),
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: filtered.length,
@@ -250,23 +247,34 @@ class _ODList extends StatelessWidget {
                   return DataRow(
                     cells: [
                       DataCell(
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundColor: AdminHelpers.getAvatarColor(r.userName).withOpacity(0.12),
-                              child: Text(r.userName.isNotEmpty ? r.userName[0] : '?', style: TextStyle(color: AdminHelpers.getAvatarColor(r.userName), fontWeight: FontWeight.bold, fontSize: 12)),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(r.userId).get(),
+                          builder: (context, snap) {
+                            final userData = snap.data?.data() as Map?;
+                            final name = userData?['name'] ?? r.userName;
+                            final profilePic = userData?['profilePicUrl'];
+                            return Row(
                               children: [
-                                Text(r.userName.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
-                                Text(r.employeeId ?? 'N/A', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AdminHelpers.getAvatarColor(name).withOpacity(0.12),
+                                  backgroundImage: (profilePic != null && profilePic != "") ? NetworkImage(profilePic) : null,
+                                  child: (profilePic == null || profilePic == "") 
+                                    ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: TextStyle(color: AdminHelpers.getAvatarColor(name), fontWeight: FontWeight.bold, fontSize: 12))
+                                    : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                                    Text(userData?['employeeId'] ?? r.employeeId ?? 'N/A', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                  ],
+                                ),
                               ],
-                            ),
-                          ],
+                            );
+                          }
                         ),
                       ),
                       DataCell(Text(
@@ -475,22 +483,35 @@ class _OnDutyCardState extends State<_OnDutyCard> {
         children: [
            // 1️⃣ HEADER
            Padding(
-             padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
              child: Row(
                children: [
-                 CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AdminHelpers.getAvatarColor(r.userName).withOpacity(0.12),
-                    child: Text(r.userName.isNotEmpty ? r.userName[0] : '?', 
-                      style: TextStyle(color: AdminHelpers.getAvatarColor(r.userName), fontWeight: FontWeight.bold, fontSize: 18)),
+                 FutureBuilder<DocumentSnapshot>(
+                   future: FirebaseFirestore.instance.collection('users').doc(r.userId).get(),
+                   builder: (context, snap) {
+                     final userData = snap.data?.data() as Map?;
+                     final name = userData?['name'] ?? r.userName;
+                     final profilePic = userData?['profilePicUrl'];
+                     return CircleAvatar(
+                       radius: 20,
+                       backgroundColor: AdminHelpers.getAvatarColor(name).withOpacity(0.12),
+                       backgroundImage: (profilePic != null && profilePic != "") ? NetworkImage(profilePic) : null,
+                       child: (profilePic == null || profilePic == "") 
+                         ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?', 
+                           style: TextStyle(color: AdminHelpers.getAvatarColor(name), fontWeight: FontWeight.bold, fontSize: 16))
+                         : null,
+                     );
+                   }
                  ),
-                 const SizedBox(width: 16),
+                 const SizedBox(width: 12),
                  Expanded(
                    child: Column(
                      crossAxisAlignment: CrossAxisAlignment.start,
                      children: [
-                       Text(r.userName.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B))),
-                       Text("ID: ${r.employeeId}", style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 12)),
+                       Text(r.userName.toUpperCase(), 
+                         maxLines: 1, overflow: TextOverflow.ellipsis,
+                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+                       Text("ID: ${r.employeeId}", style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 11)),
                      ],
                    ),
                  ),
@@ -503,7 +524,7 @@ class _OnDutyCardState extends State<_OnDutyCard> {
 
            // 2️⃣ DETAILS GRID
            Padding(
-             padding: const EdgeInsets.all(24),
+             padding: const EdgeInsets.all(16),
              child: Column(
                children: [
                   Row(

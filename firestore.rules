@@ -47,10 +47,13 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────
     match /users/{userId} {
       // 🔓 PUBLIC LOGIN LOOKUP
-      allow list: if request.auth == null && request.query.limit == 1;
+      allow list: if (request.auth == null && request.query.limit == 1) || isAuthenticated();
 
       // Staff: Read/Write own document
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
+
+      // ✅ Allow reading admin profiles (needed for notifyAdmins)
+      allow read: if isAuthenticated() && (resource.data.role in ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN', 'Admin', 'Super Admin']);
 
       // Admin/Super Admin: Management access
       // Allow read/create/update if Admin of the target department

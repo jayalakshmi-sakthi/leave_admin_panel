@@ -15,7 +15,48 @@ import '../main.dart';
 
 @pragma('vm:entry-point')
 Future<void> fcmBackgroundHandler(RemoteMessage message) async {
+  // Must call ensureInitialized before anything else in isolate
+  WidgetsFlutterBinding.ensureInitialized();
   debugPrint("🔥 [Admin FCM Background] Message ID: ${message.messageId}");
+
+  // Show a system-tray notification so it appears even when app is closed
+  if (message.notification != null) {
+    try {
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      final plugin = FlutterLocalNotificationsPlugin();
+      await plugin.initialize(const InitializationSettings(android: androidSettings));
+
+      const channel = AndroidNotificationChannel(
+        'admin_alerts_channel',
+        'Admin Alerts',
+        description: 'Notifications for new leave requests',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
+      await plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
+
+      await plugin.show(
+        message.hashCode,
+        message.notification!.title,
+        message.notification!.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'admin_alerts_channel',
+            'Admin Alerts',
+            importance: Importance.max,
+            priority: Priority.max,
+            color: Color(0xFF7C3AED),
+          ),
+        ),
+        payload: jsonEncode(message.data),
+      );
+    } catch (e) {
+      debugPrint("❌ Background local notification error: $e");
+    }
+  }
 }
 
 class NotificationService {
@@ -32,6 +73,10 @@ class NotificationService {
   // 🧭 Navigation Stream
   final _navController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get navigationStream => _navController.stream;
+  
+  Map<String, dynamic>? _pendingData; // ✅ Handles "Terminated State" clicks
+  Map<String, dynamic>? get pendingNavigation => _pendingData;
+  void clearPendingNavigation() => _pendingData = null;
 
   /// Request notification permissions (System Level)
   Future<void> requestPermission() async {
@@ -90,8 +135,20 @@ class NotificationService {
 
          FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
             debugPrint("🔥 [Admin FCM Background Click]: ${message.data}");
-            _navController.add(message.data);
+            if (_navController.hasListener) {
+              _navController.add(message.data);
+            } else {
+              _pendingData = message.data;
+            }
          });
+
+         // ✅ Handle terminated-state launch (app was fully closed when notification tapped)
+         final initialMessage = await _fcm.getInitialMessage();
+         if (initialMessage != null) {
+           debugPrint("🔥 [Admin FCM Terminated Launch]: ${initialMessage.data}");
+           _pendingData = initialMessage.data;
+           _navController.add(initialMessage.data); // Still add to stream in case listener is already active
+         }
       }
     } catch (e) {
       debugPrint("⚠️ Admin FCM Init Error: $e");
@@ -125,7 +182,11 @@ class NotificationService {
                  try {
                    final data = jsonDecode(payload) as Map<String, dynamic>;
                    debugPrint("🔔 Local Notification Click Payload: $data");
-                   _navController.add(data); // Push to stream
+                   if (_navController.hasListener) {
+                     _navController.add(data);
+                   } else {
+                     _pendingData = data;
+                   }
                  } catch (e) {
                    debugPrint("Error parsing payload: $e");
                  }
@@ -163,6 +224,9 @@ class NotificationService {
   void setUserId(String? userId) {
     _currentUserId = userId;
     if (userId != null) {
+      // 🛡️ Start real-time Firestore listener for notifications (Fallback/Real-time)
+      listenForNewNotifications(userId);
+
       if (kIsWeb) {
         js_helper.setOneSignalUser(userId);
       } else {
@@ -240,7 +304,7 @@ class NotificationService {
 
       // Send to identified recipients
       for (var uid in recipientIds) {
-        await sendNotification(
+        sendNotification(
           toUserId: uid,
           title: title,
           body: body,
@@ -249,7 +313,7 @@ class NotificationService {
           leaveType: leaveType,
           academicYearId: academicYearId,
           targetDepartment: targetDepartment,
-        );
+        ).catchError((e) => debugPrint("Error notifying admin $uid: $e"));
       }
     } catch (e) {
       debugPrint("NotifyAdmins Error: $e");
@@ -307,13 +371,15 @@ class NotificationService {
   }) async {
     if (kIsWeb) return;
     try {
-      final androidDetails = const AndroidNotificationDetails(
+      const androidDetails = AndroidNotificationDetails(
         'admin_alerts_channel',
         'Admin Alerts',
         importance: Importance.max,
         priority: Priority.max,
         color: Color(0xFF7C3AED),
-        timeoutAfter: 5000, // ✅ Auto-dismiss after 5 seconds
+        // ✅ Removed timeoutAfter — notifications now persist in the tray
+        ongoing: false,
+        autoCancel: true,
       );
       final details = NotificationDetails(android: androidDetails);
       await _localNotifications.show(id, title, body, details, payload: payload);
@@ -337,6 +403,8 @@ class NotificationService {
       final String uniqueId = "${toUserId}_${relatedId ?? 'info'}_${type ?? 'general'}";
 
       // 1. Save to Firestore (Real-time DB)
+      final String? upperDept = targetDepartment?.trim().toUpperCase();
+      
       await _db.collection('notifications').doc(uniqueId).set({
         'toUserId': toUserId,
         'title': title,
@@ -345,7 +413,7 @@ class NotificationService {
         'relatedId': relatedId,
         'leaveType': leaveType,
         'academicYearId': academicYearId,
-        'targetDepartment': targetDepartment,
+        'targetDepartment': upperDept,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -360,7 +428,7 @@ class NotificationService {
           'relatedId': relatedId ?? '',
           'leaveType': leaveType ?? '',
           'academicYearId': academicYearId ?? '',
-          'targetDepartment': targetDepartment ?? '',
+          'targetDepartment': upperDept ?? '',
         },
       );
     } catch (e) {
@@ -410,10 +478,13 @@ class NotificationService {
         }),
       );
 
-      if (response.statusCode == 200) {
-        debugPrint("🚀 OneSignal Push Sent Successfully to $toUserId");
+      if (response.statusCode != 200) {
+        debugPrint("❌ OneSignal Push Failed (${response.statusCode}): ${response.body}");
+        if (response.body.contains("Access denied")) {
+          debugPrint("⚠️ TIP: Your OneSignal REST API Key might be invalid. Please check OneSignal Dashboard.");
+        }
       } else {
-        debugPrint("❌ OneSignal Error (${response.statusCode}): ${response.body}");
+        debugPrint("🚀 OneSignal Push Sent Successfully to $toUserId");
       }
     } catch (e) {
       debugPrint("OneSignal Push Exception: $e");

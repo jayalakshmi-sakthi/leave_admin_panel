@@ -66,79 +66,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // Initialize Notifications
     final notifService = NotificationService();
     notifService.init();
+
+    // 🛡️ Handle "Terminated State" notifications (clicked while app was closed)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+       final pending = notifService.pendingNavigation;
+       if (pending != null) {
+          debugPrint("🚀 [Admin] Processing Terminated-State Click: $pending");
+          // Use a small delay to allow the dashboard to fully settle
+          await Future.delayed(const Duration(milliseconds: 800));
+          if (mounted) {
+             _handleNavigation(pending);
+             notifService.clearPendingNavigation();
+          }
+       }
+    });
     
     // 🧭 Unified Navigation Listener (FCM & Local)
-    _navSubscription = notifService.navigationStream.listen((data) async {
+    _navSubscription = notifService.navigationStream.listen((data) {
       if (!mounted) return;
       debugPrint("🧭 Notification Navigation Triggered: $data");
-      
-      final type = data['type'] as String?;
-      final relatedId = data['relatedId'] as String?;
-      final leaveType = data['leaveType'] as String? ?? '';
-      final academicYearId = data['academicYearId'] as String? ?? '2024-2025';
-
-      // 1. Handle "New User" or Registration notifications
-      if (type == 'new_user' || (data['title']?.toString().toLowerCase().contains('registration') ?? false)) {
-         setState(() => _selectedIndex = 4); // Switch to Notifications tab check
-         Navigator.pushNamed(
-           context, 
-           AppRoutes.pendingUsers, 
-           arguments: {'departmentFilter': _isSuperAdmin ? 'All' : _adminDepartment}
-         );
-         return;
-      }
-
-      // 2. Determine Sidebar Index based on leave type
-      setState(() {
-        if (leaveType == 'COMP' || leaveType == 'Comp-Off Earn') {
-          _selectedIndex = 3; // Comp-Off
-        } else if (leaveType == 'OD' || leaveType == 'On Duty') {
-          _selectedIndex = 2; // On-Duty
-        } else {
-          _selectedIndex = 0; // Dashboard / General Leave
-        }
-      });
-
-      // 3. Deep Link to Detail Screen
-      if (relatedId != null && relatedId.isNotEmpty) {
-        if (type == 'leave_request' || (leaveType != 'COMP' && leaveType != 'Comp-Off Earn')) {
-          Navigator.pushNamed(
-            context,
-            AppRoutes.leaveRequestDetails,
-            arguments: {'id': relatedId, 'academicYearId': academicYearId},
-          );
-        } else if (type == 'comp_off_request' || leaveType == 'COMP' || leaveType == 'Comp-Off Earn') {
-          // Fetch fresh data for detailed view (using isolated department path)
-          final String? targetDept = data['targetDepartment'];
-          DocumentSnapshot? doc;
-
-          if (targetDept != null && targetDept.isNotEmpty) {
-             doc = await FirebaseFirestore.instance
-                 .collection('compOffRequests')
-                 .doc(targetDept)
-                 .collection('records')
-                 .doc(relatedId)
-                 .get();
-          }
-
-          if (doc == null || !doc.exists) {
-             // Search across all groups if path is ambiguous
-             final search = await FirebaseFirestore.instance
-                  .collectionGroup('records')
-                  .where('applicationId', isEqualTo: relatedId)
-                  .get();
-             if (search.docs.isNotEmpty) doc = search.docs.first;
-          }
-
-          if (doc != null && doc.exists && mounted) {
-            Navigator.pushNamed(
-              context,
-              AppRoutes.adminCompOffDetails,
-              arguments: {'docId': doc.id, 'data': doc.data()!},
-            );
-          }
-        }
-      }
+      _handleNavigation(data);
     });
     
     if (FirebaseAuth.instance.currentUser != null) {
@@ -164,6 +111,97 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             body: AdminHelpers.sanitizeLabel(data['body'] ?? ''),
           );
         });
+    }
+  }
+
+  void _handleNavigation(Map<String, dynamic> data) async {
+    final type = data['type'] as String?;
+    final relatedId = data['relatedId'] as String?;
+    final leaveType = data['leaveType'] as String? ?? '';
+    final academicYearId = data['academicYearId'] as String? ?? '2024-2025';
+
+    debugPrint("🧭 Navigating to: type=$type, id=$relatedId, leaveType=$leaveType");
+
+    // 1. Handle "New User" or Registration notifications
+    if (type == 'new_user' || (data['title']?.toString().toLowerCase().contains('registration') ?? false)) {
+       setState(() => _selectedIndex = 4); 
+       Navigator.pushNamed(
+         context, 
+         AppRoutes.pendingUsers, 
+         arguments: {'departmentFilter': _isSuperAdmin ? 'All' : _adminDepartment}
+       );
+       return;
+    }
+
+    // 2. Determine Sidebar Index
+    setState(() {
+      if (type == 'comp_off_request' || leaveType == 'COMP' || leaveType == 'Comp-Off Earn' || leaveType == 'Comp-Off') {
+        _selectedIndex = 3; 
+      } else if (type == 'on_duty_request' || leaveType == 'OD' || leaveType == 'On Duty') {
+        _selectedIndex = 2; 
+      } else {
+        _selectedIndex = 0; 
+      }
+    });
+
+    // 3. Deep Link to Detail Screen
+    if (relatedId != null && relatedId.isNotEmpty) {
+      if (type == 'comp_off_request' || leaveType == 'COMP' || leaveType == 'Comp-Off Earn' || leaveType == 'Comp-Off') {
+        try {
+          final String? targetDept = data['targetDepartment'];
+          DocumentSnapshot? doc;
+
+          if (targetDept != null && targetDept.isNotEmpty) {
+             doc = await FirebaseFirestore.instance
+                 .collection('compOffRequests')
+                 .doc(targetDept)
+                 .collection('records')
+                 .doc(relatedId)
+                 .get();
+          }
+
+          if (doc == null || !doc.exists) {
+             final search = await FirebaseFirestore.instance
+                  .collectionGroup('records')
+                  .where('id', isEqualTo: relatedId)
+                  .limit(1)
+                  .get();
+             if (search.docs.isNotEmpty) doc = search.docs.first;
+          }
+
+          if (doc == null || !doc.exists) {
+             final searchAppId = await FirebaseFirestore.instance
+                  .collectionGroup('records')
+                  .where('applicationId', isEqualTo: relatedId)
+                  .limit(1)
+                  .get();
+             if (searchAppId.docs.isNotEmpty) doc = searchAppId.docs.first;
+          }
+
+          if (doc != null && doc.exists && mounted) {
+            Navigator.pushNamed(
+              context,
+              AppRoutes.adminCompOffDetails,
+              arguments: {'docId': doc.id, 'data': doc.data()!},
+            );
+          } else {
+            debugPrint("⚠️ Record not found for relatedId: $relatedId");
+          }
+        } catch (e) {
+          debugPrint("❌ Redirection Error: $e");
+        }
+      } else {
+        // Default to Leave/OD Detail
+        Navigator.pushNamed(
+          context,
+          AppRoutes.leaveRequestDetails,
+          arguments: {
+            'id': relatedId, 
+            'academicYearId': academicYearId,
+            'department': data['targetDepartment'] ?? _adminDepartment,
+          },
+        );
+      }
     }
   }
 
@@ -469,7 +507,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     // CONTENT BODY
                     Expanded(
                       child: Padding(
-                        padding: EdgeInsets.all(isDesktop ? 32 : 16),
+                        padding: EdgeInsets.all(isDesktop ? 20 : 12),
                         child: _pageWithDependencies(),
                       ),
                     ),
@@ -516,23 +554,97 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildAdminAvatar() {
     final hasPic = _adminProfilePic != null && _adminProfilePic!.isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: AdminHelpers.primaryColor.withOpacity(0.1), width: 2),
-      ),
-      child: CircleAvatar(
-        radius: 18,
-        backgroundColor: Colors.white,
-        backgroundImage: hasPic ? NetworkImage(_adminProfilePic!) : null,
-        child: !hasPic 
-            ? const Icon(Icons.person_rounded, color: AdminHelpers.primaryColor, size: 20)
-            : null,
+    return InkWell(
+      onTap: _showAdminProfileDialog,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: AdminHelpers.primaryColor.withOpacity(0.1), width: 2),
+        ),
+        child: CircleAvatar(
+          radius: 18,
+          backgroundColor: Colors.white,
+          backgroundImage: hasPic ? NetworkImage(_adminProfilePic!) : null,
+          child: !hasPic 
+              ? const Icon(Icons.person_rounded, color: AdminHelpers.primaryColor, size: 20)
+              : null,
+        ),
       ),
     );
   }
 
+  void _showAdminProfileDialog() {
+    final user = FirebaseAuth.instance.currentUser;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.admin_panel_settings, color: AdminHelpers.primaryColor),
+            const SizedBox(width: 12),
+            const Text("Admin Profile", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 40,
+              backgroundColor: AdminHelpers.primaryColor.withOpacity(0.1),
+              backgroundImage: (_adminProfilePic != null && _adminProfilePic!.isNotEmpty) ? NetworkImage(_adminProfilePic!) : null,
+              child: (_adminProfilePic == null || _adminProfilePic!.isEmpty) 
+                  ? const Icon(Icons.person, size: 40, color: AdminHelpers.primaryColor)
+                  : null,
+            ),
+            const SizedBox(height: 20),
+            _profileRow(Icons.person_outline, "Name", _adminName),
+            const SizedBox(height: 12),
+            _profileRow(Icons.email_outlined, "Email", user?.email ?? 'N/A'),
+            const SizedBox(height: 12),
+            _profileRow(Icons.business_outlined, "Department", _adminDepartment),
+            const SizedBox(height: 12),
+            _profileRow(Icons.shield_outlined, "Role", _isSuperAdmin ? "Super Admin" : "Department Admin"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _logout();
+            },
+            icon: const Icon(Icons.logout, size: 16),
+            label: const Text("Logout"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AdminHelpers.textMuted),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 10, color: AdminHelpers.textMuted, fontWeight: FontWeight.bold)),
+              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AdminHelpers.textMain)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildNotificationIcon() {
     return StreamBuilder<int>(
@@ -608,10 +720,10 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
         final requests = allRequests.where((r) => r.leaveType != 'OD').toList();
 
         return ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(16),
           children: [
             _buildStatsRow(requests),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Container(
               decoration: AdminHelpers.cardDecoration(context),
               child: Column(
@@ -634,7 +746,7 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
                 ],
               ),
             ),
-            const SizedBox(height: 40), // Bottom spacer for safe area
+            const SizedBox(height: 32), // Bottom spacer for safe area
           ],
         );
       },
@@ -659,8 +771,9 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
     return LayoutBuilder(
       builder: (context, constraints) {
         final double width = constraints.maxWidth;
+        // 🚀 Dynamic Expansion: More columns for tablet/desktop, less aspect ratio for mobile
         int crossAxisCount = width > 1024 ? 4 : (width > 600 ? 2 : 2);
-        double spacing = width > 600 ? 20 : 12;
+        double spacing = width > 600 ? 16 : 10;
         
         return GridView.count(
           shrinkWrap: true,
@@ -668,7 +781,7 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
           crossAxisCount: crossAxisCount,
           crossAxisSpacing: spacing,
           mainAxisSpacing: spacing,
-          childAspectRatio: width > 1200 ? 1.8 : 1.4,
+          childAspectRatio: width > 1200 ? 1.6 : (width > 600 ? 1.4 : 1.1),
           children: [
             _statCard(total, "Total Records", Icons.folder_copy_rounded, AdminHelpers.primaryColor),
             _statCard(pending, "Pending", Icons.hourglass_top_rounded, AdminHelpers.warning),
@@ -684,7 +797,7 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -702,36 +815,38 @@ class _DashboardContentState extends State<DashboardContent> with TickerProvider
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              Text(
-                value.toString(),
-                style: TextStyle(
-                  color: isDark ? Colors.white : AdminHelpers.textMain,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
           ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value.toString(),
+              style: TextStyle(
+                color: isDark ? Colors.white : AdminHelpers.textMain,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
           Text(
             label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: isDark ? Colors.grey[400] : AdminHelpers.textMuted,
               fontSize: 10,
               fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -943,7 +1058,7 @@ class _RequestsList extends StatelessWidget {
                             onPressed: () => Navigator.pushNamed(
                               context,
                               AppRoutes.leaveRequestDetails,
-                              arguments: {'id': req.id, 'academicYearId': year},
+                              arguments: {'id': req.id, 'academicYearId': year, 'department': dept},
                             ),
                             tooltip: 'View Details',
                           ),
@@ -1027,7 +1142,7 @@ class _RequestsList extends StatelessWidget {
                       onPressed: () => Navigator.pushNamed(
                         context,
                         AppRoutes.leaveRequestDetails,
-                        arguments: {'id': req.id, 'academicYearId': year},
+                        arguments: {'id': req.id, 'academicYearId': year, 'department': dept},
                       ),
                       icon: const Icon(Icons.visibility_outlined, size: 16),
                       label: const Text("View"),

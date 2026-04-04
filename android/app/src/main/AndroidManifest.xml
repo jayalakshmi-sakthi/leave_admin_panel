@@ -1,13 +1,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application
-        android:label="leave_admin_panel"
+        android:label="LeaveX Admin"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
         <!-- FCM Default Channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="leave_status_channel" />
+            android:value="admin_alerts_channel" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

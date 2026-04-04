@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/notification_service.dart';
+import '../routes/app_routes.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -55,25 +56,21 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       if (input.contains('@')) {
         emailToTry = input;
       } else {
-        // 🔍 Strategy: Username Lookup in Firestore
-        try {
-           final snap = await _fire.collection('users')
-               .where('username', isEqualTo: input)
-               .limit(1)
-               .get();
+        // 👤 Check if Username exists in Firestore
+        final snap = await _fire.collection('users')
+            .where('username', isEqualTo: input)
+            .limit(1)
+            .get();
                
-           if (snap.docs.isNotEmpty) {
-             emailToTry = snap.docs.first.data()['email'];
-             debugPrint("🎯 Found mapped email: $emailToTry");
-           }
-        } catch (e) {
-           debugPrint("⚠️ Firestore lookup skipped/failed: $e");
-           // If it's a network error here, Firestore usually throws/times out
-        }
-        
-        // 👤 Fallback: Shadow Admin
-        if (emailToTry == null) {
-          emailToTry = "$input@leavex.admin";
+        if (snap.docs.isNotEmpty) {
+          emailToTry = snap.docs.first.data()['email'];
+          debugPrint("🎯 Found mapped email: $emailToTry");
+        } else {
+          // If not a username and not an email, it's just invalid
+          if (!input.contains('@')) {
+            throw "Admin username not found. Please register your account.";
+          }
+          emailToTry = input;
         }
       }
 
@@ -130,32 +127,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     }
   }
 
-  // --------------------------------------------------
-  // 🌐 GOOGLE SIGN-IN (PREMIUM ALTERNATIVE)
-  // --------------------------------------------------
-  Future<void> _signInWithGoogle() async {
-    setState(() => _loading = true);
-    try {
-      final googleProvider = GoogleAuthProvider();
-      // Use signInWithPopup for Web
-      final UserCredential cred = await _auth.signInWithPopup(googleProvider);
-      final uid = cred.user!.uid;
-
-      // Check role
-      final userDoc = await _fire.collection('users').doc(uid).get();
-      if (!userDoc.exists || (userDoc.data()?['role'] != 'admin' && userDoc.data()?['role'] != 'super_admin')) {
-         // This triggers the Access Restricted screen in AuthWrapper/Dashboard load logic
-      }
-
-      if (!mounted) return;
-      NotificationService().setUserId(uid);
-      Navigator.pushReplacementNamed(context, '/dashboard');
-    } catch (e) {
-      _showError("Google Sign-In failed: $e");
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  // Removed Google Sign-In as it's not needed for the admin panel
 
   void _showError(String msg) {
     if (!mounted) return;
@@ -333,7 +305,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 _buildIconHeader(),
                 const SizedBox(height: 24),
                 const Text(
-                  "Admin_LeaveX",
+                    "LeaveX Admin",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
@@ -396,13 +368,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 const SizedBox(height: 20),
                 _buildLoginButton(),
 
-                const SizedBox(height: 16),
-                const Text("OR", style: TextStyle(color: softText, fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-
-                // 🌐 Google Login
-                _buildGoogleButton(),
-
                 const SizedBox(height: 32),
                 
                 // 📝 Create Account Link (Dev Only/New Admin)
@@ -424,19 +389,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     );
   }
 
-  Widget _buildGoogleButton() => SizedBox(
-        width: double.infinity,
-        height: 56,
-        child: OutlinedButton.icon(
-          onPressed: _loading ? null : _signInWithGoogle,
-          icon: Image.network('https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg', width: 24, errorBuilder: (_,__,___) => const Icon(Icons.g_mobiledata, color: Colors.blue)),
-          label: const Text("Login with Google", style: TextStyle(color: darkSlate, fontWeight: FontWeight.bold)),
-          style: OutlinedButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            side: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-        ),
-      );
+  // Removed _buildGoogleButton since Google Sign-In is not needed for admin panel
 
   // --------------------------------------------------
   // 🧩 UI HELPERS
